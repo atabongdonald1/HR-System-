@@ -42,7 +42,7 @@ import {
   getDocFromServer,
   Timestamp
 } from 'firebase/firestore';
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from 'firebase/auth';
 
 enum OperationType {
   CREATE = 'create',
@@ -148,19 +148,26 @@ export function Recruitment() {
     };
     testConnection();
 
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        try {
-          await signInAnonymously(auth);
-        } catch (error) {
-          console.error("Anonymous auth failed:", error);
-        }
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsAuthReady(true);
+      } else {
+        setIsAuthReady(false);
       }
-      setIsAuthReady(true);
     });
 
     return () => unsubscribeAuth();
   }, []);
+
+  const handleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Login failed:", error);
+      setFirebaseError("Login failed. Please try again.");
+    }
+  };
 
   useEffect(() => {
     if (!isAuthReady) return;
@@ -377,6 +384,30 @@ export function Recruitment() {
     .sort((a, b) => b.hireScore - a.hireScore)
     .slice(0, 3)
     .map(c => c.id);
+
+  if (!isAuthReady) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] bg-white rounded-3xl border border-slate-100 shadow-sm p-12">
+        <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6">
+          <BrainCircuit className="w-10 h-10 text-blue-600" />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">Secure Access Required</h2>
+        <p className="text-slate-500 text-center max-w-sm mb-8">
+          Please sign in with your authorized Google account to access the NEXA-HR Recruitment Engine.
+        </p>
+        <button 
+          onClick={handleLogin}
+          className="flex items-center gap-3 px-8 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20"
+        >
+          <Globe className="w-5 h-5" />
+          Sign in with Google
+        </button>
+        {firebaseError && (
+          <p className="mt-4 text-rose-500 text-sm font-medium">{firebaseError}</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div id="recruitment-view" className="space-y-8">
