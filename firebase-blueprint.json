@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "Candidate": {
+      "title": "Candidate",
+      "description": "A job candidate profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string" },
+        "experience": { "type": "number" },
+        "skills": { "type": "array", "items": { "type": "string" } },
+        "education": { "type": "string" },
+        "hireScore": { "type": "number" },
+        "status": { "type": "string" },
+        "source": { "type": "string" },
+        "analysis": {
+          "type": "object",
+          "properties": {
+            "skillsMatch": { "type": "number" },
+            "experienceRelevance": { "type": "number" },
+            "behavioralIndicators": { "type": "array", "items": { "type": "string" } },
+            "culturalFit": { "type": "number" },
+            "summary": { "type": "string" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "email", "role", "status"]
+    }
+  },
+  "firestore": {
+    "/candidates/{candidateId}": {
+      "schema": "Candidate",
+      "description": "Collection of job candidates"
+    }
+  }
+}

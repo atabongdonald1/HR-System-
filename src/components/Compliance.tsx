@@ -146,7 +146,12 @@ export function Compliance() {
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center">
           <h3 className="text-lg font-bold text-slate-900">Active Compliance Monitoring</h3>
-          <button className="text-blue-600 text-sm font-bold hover:underline">View All Checks</button>
+          <button 
+            onClick={triggerToast}
+            className="text-blue-600 text-sm font-bold hover:underline"
+          >
+            View All Checks
+          </button>
         </div>
         <div className="divide-y divide-slate-50">
           {COMPLIANCE_CHECKS.map((check) => (
@@ -177,7 +182,10 @@ export function Compliance() {
                   </div>
                 </div>
               </div>
-              <button className="p-2 text-slate-300 group-hover:text-blue-600 transition-all">
+              <button 
+                onClick={triggerToast}
+                className="p-2 text-slate-300 group-hover:text-blue-600 transition-all"
+              >
                 <ArrowRight className="w-6 h-6" />
               </button>
             </div>

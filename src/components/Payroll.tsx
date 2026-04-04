@@ -133,7 +133,10 @@ export function Payroll() {
               </div>
               <h4 className="text-lg font-bold text-emerald-900">WPS Compliance</h4>
               <p className="text-emerald-700 text-sm mt-1">Wage Protection System is fully synchronized with MOHRE.</p>
-              <button className="mt-4 text-emerald-800 text-sm font-bold flex items-center gap-2 hover:underline">
+              <button 
+                onClick={triggerToast}
+                className="mt-4 text-emerald-800 text-sm font-bold flex items-center gap-2 hover:underline"
+              >
                 View SIF Files <ArrowUpRight className="w-4 h-4" />
               </button>
             </div>
@@ -147,7 +150,10 @@ export function Payroll() {
               </div>
               <h4 className="text-lg font-bold text-blue-900">April Payroll</h4>
               <p className="text-blue-700 text-sm mt-1">Scheduled for disbursement in 24 days.</p>
-              <button className="mt-4 text-blue-800 text-sm font-bold flex items-center gap-2 hover:underline">
+              <button 
+                onClick={triggerToast}
+                className="mt-4 text-blue-800 text-sm font-bold flex items-center gap-2 hover:underline"
+              >
                 Review Adjustments <ArrowUpRight className="w-4 h-4" />
               </button>
             </div>
@@ -156,7 +162,12 @@ export function Payroll() {
           <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-bold text-slate-900">Recent Payslips</h3>
-              <button className="text-blue-600 text-sm font-bold hover:underline">View All</button>
+              <button 
+                onClick={triggerToast}
+                className="text-blue-600 text-sm font-bold hover:underline"
+              >
+                View All
+              </button>
             </div>
             <div className="space-y-4">
               {MOCK_EMPLOYEES.slice(0, 3).map((employee) => (
@@ -170,7 +181,10 @@ export function Payroll() {
                       <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">March 2024 • {employee.salary.toLocaleString()} {employee.currency}</p>
                     </div>
                   </div>
-                  <button className="p-2 text-slate-400 group-hover:text-blue-600 transition-all">
+                  <button 
+                    onClick={triggerToast}
+                    className="p-2 text-slate-400 group-hover:text-blue-600 transition-all"
+                  >
                     <Download className="w-5 h-5" />
                   </button>
                 </div>

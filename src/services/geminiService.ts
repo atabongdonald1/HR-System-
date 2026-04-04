@@ -70,13 +70,16 @@ export const geminiService = {
     return response.text;
   },
 
-  async sourceCandidates(jobPosts: any[]) {
+  async sourceCandidates(jobPosts: any[], params?: { location?: string; skills?: string[] }) {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `You are NEXA-SOURCE, an Autonomous Talent Sourcing Intelligence Agent.
       Your mission is to source highly relevant candidates for these active job positions:
       ${JSON.stringify(jobPosts)}
       
+      ${params?.location ? `Focus on candidates located in or willing to relocate to: ${params.location}` : ""}
+      ${params?.skills?.length ? `Prioritize candidates with these specific skills: ${params.skills.join(", ")}` : ""}
+
       For each job, identify 2-3 top-tier candidates. 
       Prioritize GCC experience for hospitality/logistics roles.
       Return a list of candidates with full details including scoring (0-100).`,

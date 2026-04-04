@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: candidates
+    // Document ID: candidateId (string)
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required)
+    //   - email: string (required, email format)
+    //   - phone: string (optional)
+    //   - role: string (required)
+    //   - experience: number (optional)
+    //   - skills: list (optional)
+    //   - education: string (optional)
+    //   - hireScore: number (optional, 0-100)
+    //   - status: string (required, enum)
+    //   - source: string (optional)
+    //   - analysis: map (optional)
+    //   - createdAt: timestamp (optional)
+    //   - updatedAt: timestamp (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidCandidate(data) {
+      return hasRequiredFields(['id', 'name', 'email', 'role', 'status']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() <= 50 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             isValidEmail(data.email) &&
+             data.role is string && data.role.size() > 0 &&
+             data.status in ['New', 'Screening', 'Interviewing', 'Offered', 'Hired', 'Rejected'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /candidates/{candidateId} {
+      // For this HR app, we allow authenticated users to read and write candidates.
+      // In a multi-tenant app, we would scope this by organization.
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidCandidate(request.resource.data);
+      allow update: if isAuthenticated() && isValidCandidate(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
+  }
+}

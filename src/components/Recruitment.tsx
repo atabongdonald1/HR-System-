@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Filter, 
@@ -23,17 +23,58 @@ import {
   BrainCircuit,
   Database,
   RefreshCw,
-  Globe
+  Globe,
+  AlertCircle
 } from 'lucide-react';
 import { MOCK_CANDIDATES, MOCK_JOBS } from '../constants';
 import { Candidate, JobPost } from '../types';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { geminiService } from '../services/geminiService';
+import { db, auth } from '../lib/firebase';
+import { 
+  collection, 
+  onSnapshot, 
+  setDoc, 
+  doc, 
+  query, 
+  orderBy, 
+  getDocFromServer,
+  Timestamp
+} from 'firebase/firestore';
+import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
 
 export function Recruitment() {
   const [activeView, setActiveView] = useState<'jobs' | 'candidates'>('candidates');
-  const [candidates, setCandidates] = useState(MOCK_CANDIDATES);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [jobs, setJobs] = useState<JobPost[]>(MOCK_JOBS);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
@@ -42,7 +83,13 @@ export function Recruitment() {
   const [isSourcing, setIsSourcing] = useState(false);
   const [isCollecting, setIsCollecting] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [candidateIdError, setCandidateIdError] = useState<string | null>(null);
+  const [isSourcingModalOpen, setIsSourcingModalOpen] = useState(false);
+  const [sourcingLocation, setSourcingLocation] = useState('');
+  const [sourcingSkills, setSourcingSkills] = useState('');
   const [toastMessage, setToastMessage] = useState({ title: '', description: '' });
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [firebaseError, setFirebaseError] = useState<string | null>(null);
   
   // Filtering state
   const [searchQuery, setSearchQuery] = useState('');
@@ -51,21 +98,103 @@ export function Recruitment() {
   const [skillFilter, setSkillFilter] = useState<string>('All');
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
 
-  const handleSchedule = (candidateId: string) => {
-    setSchedulingId(candidateId);
-    // Simulate API call
+  const handleSchedule = (id: string) => {
+    setSchedulingId(id);
     setTimeout(() => {
-      setCandidates(prev => prev.map(c => 
-        c.id === candidateId ? { ...c, status: 'Interviewing' } : c
-      ));
       setSchedulingId(null);
       setToastMessage({
         title: 'Interview Scheduled',
-        description: 'A calendar invite has been sent to the candidate.'
+        description: 'The interview has been successfully added to the calendar.'
       });
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3000);
-    }, 1500);
+    }, 2000);
+  };
+
+  const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
+    const errInfo: FirestoreErrorInfo = {
+      error: error instanceof Error ? error.message : String(error),
+      authInfo: {
+        userId: auth.currentUser?.uid,
+        email: auth.currentUser?.email,
+        emailVerified: auth.currentUser?.emailVerified,
+        isAnonymous: auth.currentUser?.isAnonymous,
+        tenantId: auth.currentUser?.tenantId,
+        providerInfo: auth.currentUser?.providerData.map(provider => ({
+          providerId: provider.providerId,
+          displayName: provider.displayName,
+          email: provider.email,
+          photoUrl: provider.photoURL
+        })) || []
+      },
+      operationType,
+      path
+    };
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+    setFirebaseError(errInfo.error);
+    throw new Error(JSON.stringify(errInfo));
+  };
+
+  useEffect(() => {
+    const testConnection = async () => {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if(error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration. ");
+          setFirebaseError("Firebase is offline. Check configuration.");
+        }
+      }
+    };
+    testConnection();
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        try {
+          await signInAnonymously(auth);
+        } catch (error) {
+          console.error("Anonymous auth failed:", error);
+        }
+      }
+      setIsAuthReady(true);
+    });
+
+    return () => unsubscribeAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthReady) return;
+
+    const q = query(collection(db, 'candidates'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedCandidates = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as Candidate[];
+      
+      if (fetchedCandidates.length === 0) {
+        setCandidates(MOCK_CANDIDATES);
+      } else {
+        setCandidates(fetchedCandidates);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'candidates');
+    });
+
+    return () => unsubscribe();
+  }, [isAuthReady]);
+
+  const saveCandidate = async (candidate: Candidate) => {
+    try {
+      const candidateData = {
+        ...candidate,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+      await setDoc(doc(db, 'candidates', candidate.id), candidateData);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `candidates/${candidate.id}`);
+    }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -100,7 +229,8 @@ export function Recruitment() {
         }
       };
 
-      setCandidates(prev => [newCandidate, ...prev]);
+      await saveCandidate(newCandidate);
+      
       setToastMessage({
         title: 'CV Analyzed Successfully',
         description: `${newCandidate.name} has been added to the candidate pool with a score of ${newCandidate.hireScore}.`
@@ -122,10 +252,14 @@ export function Recruitment() {
     }
   };
 
-  const handleAutoSource = async () => {
+  const handleAutoSource = async (location?: string, skills?: string[]) => {
     setIsSourcing(true);
+    setIsSourcingModalOpen(false);
     try {
-      const sourcedCandidates = await geminiService.sourceCandidates(jobs);
+      const sourcedCandidates = await geminiService.sourceCandidates(jobs, { 
+        location, 
+        skills: skills?.filter(s => s.trim() !== '') 
+      });
       
       const newCandidates: Candidate[] = sourcedCandidates.map((c: any) => ({
         id: Math.random().toString(36).substr(2, 9),
@@ -148,7 +282,10 @@ export function Recruitment() {
         }
       }));
 
-      setCandidates(prev => [...newCandidates, ...prev]);
+      for (const candidate of newCandidates) {
+        await saveCandidate(candidate);
+      }
+
       setToastMessage({
         title: 'NEXA-SOURCE Completed',
         description: `Successfully sourced ${newCandidates.length} highly relevant candidates for active job roles.`
@@ -194,7 +331,10 @@ export function Recruitment() {
         }
       }));
 
-      setCandidates(prev => [...newCandidates, ...prev]);
+      for (const candidate of newCandidates) {
+        await saveCandidate(candidate);
+      }
+
       setToastMessage({
         title: 'NEXA-COLLECT Ingestion Complete',
         description: `Successfully ingested and normalized ${newCandidates.length} CVs into the talent database.`
@@ -233,8 +373,35 @@ export function Recruitment() {
     return matchesSearch && matchesStatus && matchesRole && matchesSkill;
   });
 
+  const topCandidateIds = [...filteredCandidates]
+    .sort((a, b) => b.hireScore - a.hireScore)
+    .slice(0, 3)
+    .map(c => c.id);
+
   return (
     <div id="recruitment-view" className="space-y-8">
+      <AnimatePresence>
+        {firebaseError && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-rose-50 border border-rose-200 p-3 rounded-xl shadow-xl flex items-center gap-3"
+          >
+            <AlertCircle className="w-5 h-5 text-rose-500" />
+            <div>
+              <p className="text-sm font-bold text-rose-700">Database Connection Issue</p>
+              <p className="text-xs text-rose-600">{firebaseError}</p>
+            </div>
+            <button 
+              onClick={() => setFirebaseError(null)}
+              className="p-1 hover:bg-rose-100 rounded-lg transition-colors"
+            >
+              <X className="w-4 h-4 text-rose-400" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div id="recruitment-header" className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Recruitment Engine</h2>
@@ -288,7 +455,7 @@ export function Recruitment() {
             </button>
             <button 
               id="btn-auto-source"
-              onClick={handleAutoSource}
+              onClick={() => setIsSourcingModalOpen(true)}
               disabled={isSourcing || isUploading || isCollecting}
               className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition-all disabled:opacity-50 shadow-lg shadow-slate-900/20"
             >
@@ -454,9 +621,26 @@ export function Recruitment() {
             className="grid grid-cols-1 gap-4"
           >
             {filteredCandidates.length > 0 ? (
-              filteredCandidates.map((candidate) => (
-                <div key={candidate.id} id={`candidate-card-${candidate.id}`} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
-                <div className="flex items-start justify-between">
+              filteredCandidates.map((candidate) => {
+                const isTopCandidate = topCandidateIds.includes(candidate.id);
+                return (
+                  <div 
+                    key={candidate.id} 
+                    id={`candidate-card-${candidate.id}`} 
+                    className={cn(
+                      "bg-white p-6 rounded-2xl border shadow-sm hover:shadow-md transition-all group relative overflow-hidden",
+                      isTopCandidate ? "border-blue-200 ring-1 ring-blue-100" : "border-slate-100"
+                    )}
+                  >
+                    {isTopCandidate && (
+                      <div className="absolute top-0 right-0">
+                        <div className="bg-blue-600 text-white text-[8px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-tighter flex items-center gap-1">
+                          <Sparkles className="w-2 h-2" />
+                          Top Talent
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-start justify-between">
                   <div className="flex gap-4">
                     <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-2xl font-bold text-slate-400">
                       {candidate.name.charAt(0)}
@@ -473,7 +657,7 @@ export function Recruitment() {
                         {candidate.source && (
                           <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
                             <Globe className="w-2.5 h-2.5" />
-                            {candidate.source}
+                            Source: {candidate.source}
                           </span>
                         )}
                       </div>
@@ -505,7 +689,17 @@ export function Recruitment() {
                       </div>
                       <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Hire Score</p>
                     </div>
-                    <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all">
+                    <button 
+                      onClick={() => {
+                        setToastMessage({
+                          title: 'Candidate Actions',
+                          description: `Managing actions for ${candidate.name}.`
+                        });
+                        setShowToast(true);
+                        setTimeout(() => setShowToast(false), 3000);
+                      }}
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
+                    >
                       <MoreVertical className="w-5 h-5" />
                     </button>
                   </div>
@@ -572,8 +766,9 @@ export function Recruitment() {
                   </div>
                 )}
               </div>
-            ))
-          ) : (
+                );
+              })
+            ) : (
             <div className="bg-white p-12 rounded-2xl border border-dashed border-slate-200 text-center">
               <Users className="w-12 h-12 text-slate-200 mx-auto mb-4" />
               <h3 className="text-lg font-bold text-slate-900">No candidates found</h3>
@@ -809,6 +1004,67 @@ export function Recruitment() {
         )}
       </AnimatePresence>
 
+      {/* Sourcing Parameters Modal */}
+      <AnimatePresence>
+        {isSourcingModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-8">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">NEXA-SOURCE Config</h3>
+                    <p className="text-slate-500 text-sm">Define your sourcing parameters.</p>
+                  </div>
+                  <button 
+                    onClick={() => setIsSourcingModalOpen(false)}
+                    className="p-2 hover:bg-slate-100 rounded-full transition-all"
+                  >
+                    <X className="w-5 h-5 text-slate-400" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Target Location</label>
+                    <input 
+                      type="text"
+                      placeholder="e.g. Dubai, UAE or Remote"
+                      value={sourcingLocation}
+                      onChange={(e) => setSourcingLocation(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Specific Skills (comma separated)</label>
+                    <textarea 
+                      placeholder="e.g. React, Node.js, Project Management"
+                      value={sourcingSkills}
+                      onChange={(e) => setSourcingSkills(e.target.value)}
+                      rows={3}
+                      className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 resize-none"
+                    />
+                  </div>
+
+                  <button 
+                    onClick={() => handleAutoSource(sourcingLocation, sourcingSkills.split(',').map(s => s.trim()))}
+                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 flex items-center justify-center gap-2"
+                  >
+                    <Sparkles className="w-5 h-5 text-blue-400" />
+                    Activate NEXA-SOURCE
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Add Candidate / Job Post Modal */}
       <AnimatePresence>
         {isAddModalOpen && (
@@ -831,7 +1087,10 @@ export function Recruitment() {
                   </p>
                 </div>
                 <button 
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => {
+                    setIsAddModalOpen(false);
+                    setCandidateIdError(null);
+                  }}
                   className="p-2 hover:bg-white rounded-xl transition-colors text-slate-400 hover:text-slate-600 shadow-sm"
                 >
                   <X className="w-5 h-5" />
@@ -845,8 +1104,27 @@ export function Recruitment() {
                   const formData = new FormData(e.currentTarget);
                   
                   if (activeView === 'candidates') {
+                    const candidateId = formData.get('candidateId') as string;
+                    
+                    // Validation for Candidate ID
+                    if (candidateId) {
+                      if (!/^[a-zA-Z0-9]+$/.test(candidateId)) {
+                        setCandidateIdError('ID must be alphanumeric');
+                        return;
+                      }
+                      if (candidateId.length > 10) {
+                        setCandidateIdError('ID must be max 10 characters');
+                        return;
+                      }
+                      if (candidates.some(c => c.id === candidateId)) {
+                        setCandidateIdError('ID already exists');
+                        return;
+                      }
+                    }
+                    
+                    setCandidateIdError(null);
                     const newCandidate: Candidate = {
-                      id: Math.random().toString(36).substr(2, 9),
+                      id: candidateId || Math.random().toString(36).substr(2, 9),
                       name: formData.get('name') as string,
                       email: formData.get('email') as string,
                       phone: formData.get('phone') as string,
@@ -854,8 +1132,8 @@ export function Recruitment() {
                       experience: Number(formData.get('experience')),
                       skills: (formData.get('skills') as string).split(',').map(s => s.trim()),
                       education: formData.get('education') as string || 'Not specified',
-                      hireScore: 70,
-                      status: 'New',
+                      hireScore: Number(formData.get('hireScore')) || 70,
+                      status: (formData.get('status') as any) || 'New',
                       source: 'Manual Entry',
                       analysis: {
                         skillsMatch: 70,
@@ -865,11 +1143,16 @@ export function Recruitment() {
                         summary: 'Manually added candidate profile.'
                       }
                     };
-                    setCandidates(prev => [newCandidate, ...prev]);
+                    
+                    saveCandidate(newCandidate);
+                    
+                    setIsAddModalOpen(false);
                     setToastMessage({
                       title: 'Candidate Added',
                       description: `${newCandidate.name} has been added to the pool.`
                     });
+                    setShowToast(true);
+                    setTimeout(() => setShowToast(false), 3000);
                   } else {
                     const salaryRangeStr = formData.get('phone') as string;
                     const [minStr, maxStr] = salaryRangeStr.split('-').map(s => s.trim().replace(/[^0-9]/g, ''));
@@ -990,10 +1273,60 @@ export function Recruitment() {
                   />
                 </div>
 
+                {activeView === 'candidates' && (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Candidate ID</label>
+                      <input 
+                        name="candidateId"
+                        type="text" 
+                        placeholder="e.g. C123"
+                        maxLength={10}
+                        onChange={() => setCandidateIdError(null)}
+                        className={cn(
+                          "w-full px-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500",
+                          candidateIdError ? "ring-2 ring-rose-500" : ""
+                        )}
+                      />
+                      {candidateIdError && (
+                        <p className="text-[10px] text-rose-500 font-bold mt-1">{candidateIdError}</p>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Hire Score</label>
+                      <input 
+                        name="hireScore"
+                        type="number" 
+                        min="0"
+                        max="100"
+                        defaultValue="70"
+                        className="w-full px-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Status</label>
+                      <select 
+                        name="status"
+                        className="w-full px-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="New">New</option>
+                        <option value="Screening">Screening</option>
+                        <option value="Interviewing">Interviewing</option>
+                        <option value="Offered">Offered</option>
+                        <option value="Hired">Hired</option>
+                        <option value="Rejected">Rejected</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
                 <div className="pt-4 flex gap-3">
                   <button 
                     type="button"
-                    onClick={() => setIsAddModalOpen(false)}
+                    onClick={() => {
+                      setIsAddModalOpen(false);
+                      setCandidateIdError(null);
+                    }}
                     className="flex-1 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-200 transition-all"
                   >
                     Cancel

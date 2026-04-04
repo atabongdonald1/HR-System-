@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Users, 
   UserPlus, 
   TrendingUp, 
   AlertCircle,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Download,
+  Sparkles
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -18,7 +20,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
 const data = [
@@ -53,6 +55,13 @@ const StatCard = ({ id, title, value, change, trend, icon: Icon, color }: any) =
 );
 
 export function Dashboard() {
+  const [showToast, setShowToast] = useState(false);
+
+  const triggerToast = () => {
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  };
+
   return (
     <div id="dashboard-view" className="space-y-8">
       <div id="dashboard-header" className="flex justify-between items-center">
@@ -61,10 +70,18 @@ export function Dashboard() {
           <p className="text-slate-500">Real-time workforce intelligence and predictive analytics.</p>
         </div>
         <div className="flex gap-3">
-          <button id="btn-export-report" className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors">
+          <button 
+            id="btn-export-report" 
+            onClick={triggerToast}
+            className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors"
+          >
             Export Report
           </button>
-          <button id="btn-generate-insights" className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20">
+          <button 
+            id="btn-generate-insights" 
+            onClick={triggerToast}
+            className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20"
+          >
             Generate Insights
           </button>
         </div>
@@ -159,6 +176,26 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {showToast && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-8 right-8 z-[100] bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-800"
+          >
+            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-sm">Executive Intelligence</p>
+              <p className="text-slate-400 text-xs">NEXA-HR is processing your request.</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

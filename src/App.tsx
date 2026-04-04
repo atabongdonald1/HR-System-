@@ -18,10 +18,14 @@ import {
   ChevronRight,
   ChevronDown,
   Calendar,
-  Filter
+  Filter,
+  User,
+  Users,
+  Briefcase
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { MOCK_CANDIDATES, MOCK_EMPLOYEES, MOCK_JOBS } from './constants';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -29,6 +33,41 @@ export default function App() {
   const [dateRange, setDateRange] = useState('Anytime');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const getSearchResults = () => {
+    if (!searchQuery.trim()) return [];
+    
+    const query = searchQuery.toLowerCase();
+    const results: any[] = [];
+
+    if (searchScope === 'All' || searchScope === 'Candidates') {
+      MOCK_CANDIDATES.forEach(c => {
+        if (c.name.toLowerCase().includes(query) || c.role.toLowerCase().includes(query)) {
+          results.push({ ...c, type: 'Candidate', icon: User });
+        }
+      });
+    }
+
+    if (searchScope === 'All' || searchScope === 'Employees') {
+      MOCK_EMPLOYEES.forEach(e => {
+        if (e.name.toLowerCase().includes(query) || e.role.toLowerCase().includes(query) || e.department.toLowerCase().includes(query)) {
+          results.push({ ...e, type: 'Employee', icon: Users });
+        }
+      });
+    }
+
+    if (searchScope === 'All' || searchScope === 'Jobs') {
+      MOCK_JOBS.forEach(j => {
+        if (j.title.toLowerCase().includes(query) || j.department.toLowerCase().includes(query)) {
+          results.push({ ...j, type: 'Job Post', icon: Briefcase });
+        }
+      });
+    }
+
+    return results.slice(0, 5); // Limit to 5 results
+  };
+
+  const searchResults = getSearchResults();
 
   const renderContent = () => {
     switch (activeTab) {
@@ -134,7 +173,7 @@ export default function App() {
                   </div>
                 </div>
                 
-                {/* Search Results Preview (Mock) */}
+                {/* Search Results Preview */}
                 <AnimatePresence>
                   {searchQuery && isSearchExpanded && (
                     <motion.div 
@@ -148,25 +187,49 @@ export default function App() {
                           Search Results in {searchScope} ({dateRange})
                         </span>
                         <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
-                          3 Matches Found
+                          {searchResults.length} Matches Found
                         </span>
                       </div>
                       <div className="max-h-80 overflow-y-auto">
-                        <div className="p-3 hover:bg-slate-50 cursor-pointer transition-colors border-b border-slate-50">
-                          <p className="text-sm font-bold text-slate-900">Sarah Ahmed</p>
-                          <p className="text-xs text-slate-500">Candidate • Housekeeping Supervisor</p>
-                        </div>
-                        <div className="p-3 hover:bg-slate-50 cursor-pointer transition-colors border-b border-slate-50">
-                          <p className="text-sm font-bold text-slate-900">Michael Chen</p>
-                          <p className="text-xs text-slate-500">Employee • Intelligence Dept</p>
-                        </div>
-                        <div className="p-3 hover:bg-slate-50 cursor-pointer transition-colors">
-                          <p className="text-sm font-bold text-slate-900">Housekeeping Supervisor</p>
-                          <p className="text-xs text-slate-500">Job Post • Dubai, UAE</p>
-                        </div>
+                        {searchResults.length > 0 ? (
+                          searchResults.map((result, idx) => (
+                            <div 
+                              key={`${result.type}-${result.id || idx}`}
+                              onClick={() => {
+                                if (result.type === 'Candidate' || result.type === 'Job Post') {
+                                  setActiveTab('recruitment');
+                                } else if (result.type === 'Employee') {
+                                  setActiveTab('workforce');
+                                }
+                                setIsSearchExpanded(false);
+                                setSearchQuery('');
+                              }}
+                              className="p-3 hover:bg-slate-50 cursor-pointer transition-colors border-b border-slate-50 flex items-center gap-3"
+                            >
+                              <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                                <result.icon className="w-4 h-4 text-slate-500" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-slate-900">{result.name || result.title}</p>
+                                <p className="text-xs text-slate-500">{result.type} • {result.role || result.department}</p>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-8 text-center">
+                            <p className="text-sm text-slate-500">No results found for "{searchQuery}"</p>
+                          </div>
+                        )}
                       </div>
                       <div className="p-3 bg-slate-50 text-center">
-                        <button className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest">
+                        <button 
+                          onClick={() => {
+                            setIsSearchExpanded(false);
+                            setSearchQuery('');
+                            alert('Full search results view is being optimized.');
+                          }}
+                          className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+                        >
                           View All Results
                         </button>
                       </div>
@@ -177,11 +240,19 @@ export default function App() {
             </div>
             
             <div className="flex items-center gap-4 border-l border-slate-200 pl-6">
-              <button id="btn-notifications" className="relative p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all">
+              <button 
+                id="btn-notifications" 
+                onClick={() => alert('You have 3 new notifications from NEXA-HR Intelligence.')}
+                className="relative p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
+              >
                 <Bell className="w-5 h-5" />
                 <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
               </button>
-              <button id="btn-help" className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all">
+              <button 
+                id="btn-help" 
+                onClick={() => alert('NEXA-HR Help Center is coming soon.')}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
+              >
                 <HelpCircle className="w-5 h-5" />
               </button>
               <div id="user-profile-summary" className="flex items-center gap-3 ml-2">
