@@ -1,0 +1,8 @@
+{
+  "name": "NEXA-HR",
+  "description": "Autonomous Human Resource Intelligence System for global workforce management and UAE labor market optimization.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
