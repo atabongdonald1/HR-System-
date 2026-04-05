@@ -29,6 +29,8 @@ export interface Employee {
   role: string;
   department: string;
   joinDate: string;
+  visaExpiry?: string; // ISO date
+  nextReviewDate?: string; // ISO date
   salary: number;
   currency: string;
   performanceScore: number;
@@ -65,4 +67,22 @@ export interface HRAction {
   timestamp: string;
   status: 'Pending' | 'Completed' | 'Flagged';
   riskLevel: 'Low' | 'Medium' | 'High';
+}
+
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'Performance' | 'Compliance' | 'Burnout' | 'System';
+  priority: 'Low' | 'Medium' | 'High';
+  timestamp: string;
+  read: boolean;
+  actionUrl?: string;
+}
+
+export interface NotificationPreferences {
+  performanceAlerts: boolean;
+  complianceAlerts: boolean;
+  burnoutAlerts: boolean;
+  emailNotifications: boolean;
 }

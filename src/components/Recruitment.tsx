@@ -24,14 +24,14 @@ import {
   Database,
   RefreshCw,
   Globe,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
-import { MOCK_CANDIDATES, MOCK_JOBS } from '../constants';
 import { Candidate, JobPost } from '../types';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { geminiService } from '../services/geminiService';
-import { db, auth } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { 
   collection, 
   onSnapshot, 
@@ -40,42 +40,16 @@ import {
   query, 
   orderBy, 
   getDocFromServer,
-  Timestamp
+  Timestamp,
+  deleteDoc,
+  updateDoc
 } from 'firebase/firestore';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from 'firebase/auth';
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
 
 export function Recruitment() {
   const [activeView, setActiveView] = useState<'jobs' | 'candidates'>('candidates');
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [jobs, setJobs] = useState<JobPost[]>(MOCK_JOBS);
+  const [jobs, setJobs] = useState<JobPost[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
@@ -85,6 +59,7 @@ export function Recruitment() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [candidateIdError, setCandidateIdError] = useState<string | null>(null);
   const [isSourcingModalOpen, setIsSourcingModalOpen] = useState(false);
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState<'candidates' | 'jobs' | null>(null);
   const [sourcingLocation, setSourcingLocation] = useState('');
   const [sourcingSkills, setSourcingSkills] = useState('');
   const [toastMessage, setToastMessage] = useState({ title: '', description: '' });
@@ -111,28 +86,13 @@ export function Recruitment() {
     }, 2000);
   };
 
-  const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
-    const errInfo: FirestoreErrorInfo = {
-      error: error instanceof Error ? error.message : String(error),
-      authInfo: {
-        userId: auth.currentUser?.uid,
-        email: auth.currentUser?.email,
-        emailVerified: auth.currentUser?.emailVerified,
-        isAnonymous: auth.currentUser?.isAnonymous,
-        tenantId: auth.currentUser?.tenantId,
-        providerInfo: auth.currentUser?.providerData.map(provider => ({
-          providerId: provider.providerId,
-          displayName: provider.displayName,
-          email: provider.email,
-          photoUrl: provider.photoURL
-        })) || []
-      },
-      operationType,
-      path
-    };
-    console.error('Firestore Error: ', JSON.stringify(errInfo));
-    setFirebaseError(errInfo.error);
-    throw new Error(JSON.stringify(errInfo));
+  const handleFirestoreErrorLocal = (error: unknown, operationType: OperationType, path: string | null) => {
+    try {
+      handleFirestoreError(error, operationType, path);
+    } catch (e: any) {
+      setFirebaseError(JSON.parse(e.message).error);
+      throw e;
+    }
   };
 
   useEffect(() => {
@@ -172,23 +132,34 @@ export function Recruitment() {
   useEffect(() => {
     if (!isAuthReady) return;
 
-    const q = query(collection(db, 'candidates'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    // Candidates subscription
+    const qCandidates = query(collection(db, 'candidates'), orderBy('createdAt', 'desc'));
+    const unsubscribeCandidates = onSnapshot(qCandidates, (snapshot) => {
       const fetchedCandidates = snapshot.docs.map(doc => ({
         ...doc.data(),
         id: doc.id
       })) as Candidate[];
-      
-      if (fetchedCandidates.length === 0) {
-        setCandidates(MOCK_CANDIDATES);
-      } else {
-        setCandidates(fetchedCandidates);
-      }
+      setCandidates(fetchedCandidates);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'candidates');
+      handleFirestoreErrorLocal(error, OperationType.LIST, 'candidates');
     });
 
-    return () => unsubscribe();
+    // Jobs subscription
+    const qJobs = query(collection(db, 'jobs'), orderBy('postedAt', 'desc'));
+    const unsubscribeJobs = onSnapshot(qJobs, (snapshot) => {
+      const fetchedJobs = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as JobPost[];
+      setJobs(fetchedJobs);
+    }, (error) => {
+      handleFirestoreErrorLocal(error, OperationType.LIST, 'jobs');
+    });
+
+    return () => {
+      unsubscribeCandidates();
+      unsubscribeJobs();
+    };
   }, [isAuthReady]);
 
   const saveCandidate = async (candidate: Candidate) => {
@@ -200,7 +171,93 @@ export function Recruitment() {
       };
       await setDoc(doc(db, 'candidates', candidate.id), candidateData);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `candidates/${candidate.id}`);
+      handleFirestoreErrorLocal(error, OperationType.WRITE, `candidates/${candidate.id}`);
+    }
+  };
+
+  const saveJob = async (job: JobPost) => {
+    try {
+      const jobData = {
+        ...job,
+        postedAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+      await setDoc(doc(db, 'jobs', job.id), jobData);
+    } catch (error) {
+      handleFirestoreErrorLocal(error, OperationType.WRITE, `jobs/${job.id}`);
+    }
+  };
+
+  const deleteCandidate = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'candidates', id));
+      setToastMessage({
+        title: 'Candidate Removed',
+        description: 'The candidate profile has been deleted from the database.'
+      });
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      handleFirestoreErrorLocal(error, OperationType.DELETE, `candidates/${id}`);
+    }
+  };
+
+  const deleteJob = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'jobs', id));
+      setToastMessage({
+        title: 'Job Post Deleted',
+        description: 'The job posting has been removed from the database.'
+      });
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      handleFirestoreErrorLocal(error, OperationType.DELETE, `jobs/${id}`);
+    }
+  };
+
+  const updateCandidateStatus = async (id: string, status: Candidate['status']) => {
+    try {
+      await updateDoc(doc(db, 'candidates', id), { 
+        status,
+        updatedAt: Timestamp.now()
+      });
+    } catch (error) {
+      handleFirestoreErrorLocal(error, OperationType.UPDATE, `candidates/${id}`);
+    }
+  };
+
+  const clearAllCandidates = async () => {
+    try {
+      const deletePromises = candidates.map(c => deleteDoc(doc(db, 'candidates', c.id)));
+      await Promise.all(deletePromises);
+      setToastMessage({
+        title: 'Database Cleared',
+        description: 'All candidates have been removed from the system.'
+      });
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      handleFirestoreErrorLocal(error, OperationType.DELETE, 'candidates');
+    } finally {
+      setIsClearConfirmOpen(null);
+    }
+  };
+
+  const clearAllJobs = async () => {
+    try {
+      const deletePromises = jobs.map(j => deleteDoc(doc(db, 'jobs', j.id)));
+      await Promise.all(deletePromises);
+      setToastMessage({
+        title: 'Database Cleared',
+        description: 'All job postings have been removed from the system.'
+      });
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      handleFirestoreErrorLocal(error, OperationType.DELETE, 'jobs');
+    } finally {
+      setIsClearConfirmOpen(null);
     }
   };
 
@@ -518,6 +575,15 @@ export function Recruitment() {
               <Plus className="w-4 h-4" />
               {activeView === 'candidates' ? 'Add Candidate' : 'Create Job Post'}
             </button>
+            <button 
+              id="btn-clear-all" 
+              onClick={() => setIsClearConfirmOpen(activeView)}
+              className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-600 rounded-xl text-sm font-medium hover:bg-rose-100 transition-colors border border-rose-100"
+              title={`Clear all ${activeView}`}
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear All
+            </button>
           </div>
         </div>
       </div>
@@ -576,6 +642,12 @@ export function Recruitment() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 transition-all"
             />
+            <button 
+              onClick={() => {}}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
+            >
+              <Search className="w-4 h-4" />
+            </button>
           </div>
           <button 
             id="btn-filter" 
@@ -711,29 +783,38 @@ export function Recruitment() {
                     </div>
                   </div>
                   
-                  <div className="flex items-start gap-8">
-                    <div className="text-right">
-                      <div className="flex items-center gap-1 justify-end text-blue-600 mb-1">
-                        <Star className="w-4 h-4 fill-current" />
-                        <span className="text-xl font-bold">{candidate.hireScore}</span>
-                        <span className="text-slate-400 text-sm font-normal">/100</span>
+                    <div className="flex items-start gap-4">
+                      <div className="text-right">
+                        <div className="flex items-center gap-1 justify-end text-blue-600 mb-1">
+                          <Star className="w-4 h-4 fill-current" />
+                          <span className="text-xl font-bold">{candidate.hireScore}</span>
+                          <span className="text-slate-400 text-sm font-normal">/100</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Hire Score</p>
                       </div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Hire Score</p>
+                      <div className="flex flex-col gap-2">
+                        <button 
+                          onClick={() => {
+                            setToastMessage({
+                              title: 'Candidate Actions',
+                              description: `Managing actions for ${candidate.name}.`
+                            });
+                            setShowToast(true);
+                            setTimeout(() => setShowToast(false), 3000);
+                          }}
+                          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
+                        >
+                          <MoreVertical className="w-5 h-5" />
+                        </button>
+                        <button 
+                          onClick={() => deleteCandidate(candidate.id)}
+                          className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                          title="Delete Candidate"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
-                    <button 
-                      onClick={() => {
-                        setToastMessage({
-                          title: 'Candidate Actions',
-                          description: `Managing actions for ${candidate.name}.`
-                        });
-                        setShowToast(true);
-                        setTimeout(() => setShowToast(false), 3000);
-                      }}
-                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
-                    >
-                      <MoreVertical className="w-5 h-5" />
-                    </button>
-                  </div>
                 </div>
 
                 {candidate.analysis && (
@@ -826,59 +907,96 @@ export function Recruitment() {
             exit={{ opacity: 0, x: -20 }}
             className="grid grid-cols-1 md:grid-cols-2 gap-6"
           >
-            {jobs.map((job) => (
-              <div key={job.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900">{job.title}</h3>
-                    <p className="text-slate-500 text-sm">{job.department} • {job.location}</p>
+            {jobs.length > 0 ? (
+              jobs.map((job) => (
+                <div key={job.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">{job.title}</h3>
+                      <p className="text-slate-500 text-sm">{job.department} • {job.location}</p>
+                    </div>
+                    <select 
+                      value={job.status}
+                      onChange={async (e) => {
+                        const newStatus = e.target.value as JobPost['status'];
+                        try {
+                          await updateDoc(doc(db, 'jobs', job.id), { 
+                            status: newStatus,
+                            updatedAt: Timestamp.now()
+                          });
+                        } catch (error) {
+                          handleFirestoreErrorLocal(error, OperationType.UPDATE, `jobs/${job.id}`);
+                        }
+                      }}
+                      className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold uppercase tracking-wider outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="Open">Open</option>
+                      <option value="Closed">Closed</option>
+                      <option value="Draft">Draft</option>
+                    </select>
                   </div>
-                  <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold uppercase tracking-wider">
-                    {job.status}
-                  </span>
-                </div>
-                <div className="flex gap-4 mb-6">
-                  <div className="flex items-center gap-1.5 text-slate-500 text-sm">
-                    <Wallet className="w-4 h-4" />
-                    {job.salaryRange.min.toLocaleString()} - {job.salaryRange.max.toLocaleString()} {job.salaryRange.currency}
+                  <div className="flex gap-4 mb-6">
+                    <div className="flex items-center gap-1.5 text-slate-500 text-sm">
+                      <Wallet className="w-4 h-4" />
+                      {job.salaryRange.min.toLocaleString()} - {job.salaryRange.max.toLocaleString()} {job.salaryRange.currency}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-500 text-sm">
+                      <Users className="w-4 h-4" />
+                      0 Applicants
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 text-slate-500 text-sm">
-                    <Users className="w-4 h-4" />
-                    12 Applicants
+                  <div className="space-y-3">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Requirements</p>
+                    <div className="flex flex-wrap gap-2">
+                      {job.requirements.map(req => (
+                        <span key={req} className="px-2 py-1 bg-slate-50 text-slate-600 rounded-lg text-xs">
+                          {req}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-6 flex gap-3">
+                    <button 
+                      onClick={() => {
+                        setShowToast(true);
+                        setTimeout(() => setShowToast(false), 3000);
+                      }}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-all"
+                    >
+                      View Applicants
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setShowToast(true);
+                        setTimeout(() => setShowToast(false), 3000);
+                      }}
+                      className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all"
+                    >
+                      Edit Post
+                    </button>
+                    <button 
+                      onClick={() => deleteJob(job.id)}
+                      className="p-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 transition-all"
+                      title="Delete Job Post"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
-                <div className="space-y-3">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Requirements</p>
-                  <div className="flex flex-wrap gap-2">
-                    {job.requirements.map(req => (
-                      <span key={req} className="px-2 py-1 bg-slate-50 text-slate-600 rounded-lg text-xs">
-                        {req}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="mt-6 flex gap-3">
-                  <button 
-                    onClick={() => {
-                      setShowToast(true);
-                      setTimeout(() => setShowToast(false), 3000);
-                    }}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-all"
-                  >
-                    View Applicants
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setShowToast(true);
-                      setTimeout(() => setShowToast(false), 3000);
-                    }}
-                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all"
-                  >
-                    Edit Post
-                  </button>
-                </div>
+              ))
+            ) : (
+              <div className="col-span-full bg-white p-12 rounded-2xl border border-dashed border-slate-200 text-center">
+                <Briefcase className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-slate-900">No job posts found</h3>
+                <p className="text-slate-500">Publish a new job to start recruiting.</p>
+                <button 
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="mt-4 text-blue-600 font-bold hover:text-blue-700"
+                >
+                  Publish Job
+                </button>
               </div>
-            ))}
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -967,6 +1085,22 @@ export function Recruitment() {
                   <div className="space-y-6">
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                       <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Candidate Status</h4>
+                        <select 
+                          value={selectedCandidate.status}
+                          onChange={(e) => {
+                            const newStatus = e.target.value as Candidate['status'];
+                            updateCandidateStatus(selectedCandidate.id, newStatus);
+                            setSelectedCandidate({ ...selectedCandidate, status: newStatus });
+                          }}
+                          className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
+                          {uniqueStatuses.filter(s => s !== 'All').map(status => (
+                            <option key={status} value={status}>{status}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center justify-between mb-4">
                         <h4 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">NEXA Score</h4>
                         <div className="flex items-center gap-1 text-blue-600">
                           <Star className="w-4 h-4 fill-current" />
@@ -994,7 +1128,7 @@ export function Recruitment() {
                         </div>
                       </div>
                     </div>
-                    <div className="pt-4">
+                    <div className="pt-4 space-y-3">
                       <button 
                         id="btn-modal-schedule"
                         onClick={() => {
@@ -1005,6 +1139,15 @@ export function Recruitment() {
                         className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
                       >
                         {schedulingId === selectedCandidate.id ? 'Scheduling...' : 'Schedule Interview'}
+                      </button>
+                      <button 
+                        onClick={() => {
+                          deleteCandidate(selectedCandidate.id);
+                          setSelectedCandidate(null);
+                        }}
+                        className="w-full py-3 bg-white border border-rose-200 text-rose-600 rounded-xl font-bold hover:bg-rose-50 transition-all"
+                      >
+                        Delete Candidate Profile
                       </button>
                     </div>
                   </div>
@@ -1032,6 +1175,42 @@ export function Recruitment() {
               <p className="text-slate-400 text-xs">{toastMessage.description}</p>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Sourcing Parameters Modal */}
+      <AnimatePresence>
+        {isClearConfirmOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center"
+            >
+              <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <AlertCircle className="w-8 h-8 text-rose-600" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Clear All {isClearConfirmOpen}?</h3>
+              <p className="text-slate-500 mb-8">
+                This action will permanently delete all {isClearConfirmOpen} from the system. This cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setIsClearConfirmOpen(null)}
+                  className="flex-1 py-3 bg-slate-50 text-slate-600 rounded-xl font-bold hover:bg-slate-100 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={isClearConfirmOpen === 'candidates' ? clearAllCandidates : clearAllJobs}
+                  className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition-all shadow-lg shadow-rose-600/20"
+                >
+                  Yes, Clear All
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
@@ -1203,7 +1382,9 @@ export function Recruitment() {
                       screeningQuestions: [],
                       status: 'Open'
                     };
-                    setJobs(prev => [newJob, ...prev]);
+                    
+                    saveJob(newJob);
+                    
                     setToastMessage({
                       title: 'Job Post Created',
                       description: `The position "${newJob.title}" has been published.`

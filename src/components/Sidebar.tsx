@@ -1,20 +1,22 @@
 import React from 'react';
 import { 
   LayoutDashboard, 
-  Users, 
   UserPlus, 
-  ShieldCheck, 
+  Users, 
+  TrendingUp, 
   Wallet, 
+  ShieldCheck, 
   MessageSquare,
-  TrendingUp,
   Settings,
-  LogOut
+  LogOut,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  onAction?: (message: string) => void;
 }
 
 const navItems = [
@@ -27,7 +29,7 @@ const navItems = [
   { id: 'console', label: 'AI Console', icon: MessageSquare },
 ];
 
-export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
+export function Sidebar({ activeTab, setActiveTab, onAction }: SidebarProps) {
   return (
     <div className="w-64 h-screen bg-slate-900 text-white flex flex-col border-r border-slate-800">
       <div className="p-6 flex items-center gap-3">
@@ -40,11 +42,10 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
         </div>
       </div>
 
-      <nav id="sidebar-nav" className="flex-1 px-4 py-4 space-y-1">
+      <nav className="flex-1 px-4 py-4 space-y-1">
         {navItems.map((item) => (
           <button
             key={item.id}
-            id={`nav-item-${item.id}`}
             onClick={() => setActiveTab(item.id)}
             className={cn(
               "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
@@ -54,24 +55,32 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
             )}
           >
             <item.icon className={cn(
-              "w-5 h-5",
+              "w-5 h-5 transition-colors",
               activeTab === item.id ? "text-white" : "text-slate-500 group-hover:text-white"
             )} />
             <span className="font-medium">{item.label}</span>
+            {activeTab === item.id && (
+              <ChevronRight className="w-4 h-4 ml-auto opacity-50" />
+            )}
           </button>
         ))}
       </nav>
 
       <div className="p-4 border-t border-slate-800 space-y-1">
         <button 
-          onClick={() => alert('Settings module is currently being optimized by NEXA-HR.')}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
+          onClick={() => setActiveTab('settings')}
+          className={cn(
+            "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
+            activeTab === 'settings' 
+              ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" 
+              : "text-slate-400 hover:bg-slate-800 hover:text-white"
+          )}
         >
           <Settings className="w-5 h-5" />
           <span className="font-medium">Settings</span>
         </button>
         <button 
-          onClick={() => alert('Logging out of NEXA-HR...')}
+          onClick={() => onAction?.('Logging out of NEXA-HR...')}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-900/20 transition-all"
         >
           <LogOut className="w-5 h-5" />

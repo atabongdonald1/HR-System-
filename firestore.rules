@@ -63,17 +63,62 @@ service cloud.firestore {
              data.status in ['New', 'Screening', 'Interviewing', 'Offered', 'Hired', 'Rejected'];
     }
 
+    function isValidEmployee(data) {
+      return hasRequiredFields(['id', 'name', 'email', 'role', 'department', 'joinDate', 'salary', 'currency']) &&
+             data.id is string && data.name is string && isValidEmail(data.email) &&
+             data.role is string && data.department is string && data.joinDate is string &&
+             data.salary is number && data.currency is string;
+    }
+
+    function isValidJob(data) {
+      return hasRequiredFields(['id', 'title', 'department', 'location', 'status']) &&
+             data.id is string && data.title is string && data.department is string &&
+             data.location is string && data.status in ['Open', 'Closed', 'Draft'];
+    }
+
+    function isValidNotification(data) {
+      return hasRequiredFields(['id', 'title', 'message', 'type', 'priority', 'timestamp', 'read']) &&
+             data.id is string && data.title is string && data.message is string &&
+             data.type in ['Performance', 'Compliance', 'Burnout', 'System'] &&
+             data.priority in ['Low', 'Medium', 'High'] &&
+             data.timestamp is string && data.read is bool;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
 
     match /candidates/{candidateId} {
-      // Allow authenticated users to read and write candidates.
-      // We also allow the bootstrapped admin full access.
       allow read: if isAuthenticated() || isAdmin();
       allow create: if (isAuthenticated() && isValidCandidate(request.resource.data)) || isAdmin();
       allow update: if (isAuthenticated() && isValidCandidate(request.resource.data)) || isAdmin();
       allow delete: if isAdmin();
+    }
+
+    match /employees/{employeeId} {
+      allow read: if isAuthenticated() || isAdmin();
+      allow create: if (isAuthenticated() && isValidEmployee(request.resource.data)) || isAdmin();
+      allow update: if (isAuthenticated() && isValidEmployee(request.resource.data)) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /jobs/{jobId} {
+      allow read: if isAuthenticated() || isAdmin();
+      allow create: if (isAuthenticated() && isValidJob(request.resource.data)) || isAdmin();
+      allow update: if (isAuthenticated() && isValidJob(request.resource.data)) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() || isAdmin();
+      allow create: if (isAuthenticated() && isValidNotification(request.resource.data)) || isAdmin();
+      allow update: if (isAuthenticated() && isValidNotification(request.resource.data)) || isAdmin();
+      allow delete: if isAuthenticated() || isAdmin();
+    }
+
+    match /userPreferences/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if (isOwner(userId) && request.resource.data.notifications is map) || isAdmin();
     }
 
     match /users/{userId} {

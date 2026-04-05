@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Filter, 
@@ -11,11 +11,17 @@ import {
   Smile,
   Meh,
   Frown,
-  Users
+  Users,
+  Plus,
+  X,
+  ShieldAlert,
+  Clock
 } from 'lucide-react';
-import { MOCK_EMPLOYEES } from '../constants';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, onSnapshot, query, orderBy, addDoc, setDoc, doc } from 'firebase/firestore';
+import { Employee } from '../types';
 
 const SentimentIcon = ({ sentiment }: { sentiment: string }) => {
   switch (sentiment) {
@@ -27,19 +33,108 @@ const SentimentIcon = ({ sentiment }: { sentiment: string }) => {
 };
 
 export function Workforce() {
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [showToast, setShowToast] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  // New Employee State
+  const [newEmployee, setNewEmployee] = useState<Partial<Employee>>({
+    name: '',
+    email: '',
+    role: '',
+    department: '',
+    joinDate: new Date().toISOString().split('T')[0],
+    salary: 5000,
+    currency: 'AED',
+    performanceScore: 80,
+    burnoutRisk: 20,
+    resignationProbability: 10,
+    sentiment: 'Positive',
+    visaExpiry: '',
+    nextReviewDate: ''
+  });
+
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      setIsAuthReady(!!user);
+    });
+
+    if (auth.currentUser) {
+      const q = query(collection(db, 'employees'), orderBy('name', 'asc'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const fetched = snapshot.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id
+        })) as Employee[];
+        setEmployees(fetched);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'employees');
+      });
+      return () => unsubscribe();
+    }
+
+    return () => unsubscribeAuth();
+  }, [isAuthReady]);
 
   const triggerToast = () => {
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
   };
 
-  const filteredEmployees = MOCK_EMPLOYEES.filter(employee => 
+  const handleAddEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const employeeData = {
+        ...newEmployee,
+        kpis: [
+          { name: 'Efficiency', value: 85, target: 90 },
+          { name: 'Quality', value: 92, target: 95 }
+        ],
+        createdAt: new Date().toISOString()
+      };
+      await addDoc(collection(db, 'employees'), employeeData);
+      setIsAddModalOpen(false);
+      setNewEmployee({
+        name: '',
+        email: '',
+        role: '',
+        department: '',
+        joinDate: new Date().toISOString().split('T')[0],
+        salary: 5000,
+        currency: 'AED',
+        performanceScore: 80,
+        burnoutRisk: 20,
+        resignationProbability: 10,
+        sentiment: 'Positive',
+        visaExpiry: '',
+        nextReviewDate: ''
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'employees');
+    }
+  };
+
+  const filteredEmployees = employees.filter(employee => 
     employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     employee.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
     employee.department.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (!isAuthReady) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-3xl border border-slate-100 shadow-sm p-12 text-center">
+        <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6">
+          <Users className="w-10 h-10 text-blue-600" />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">Access Restricted</h2>
+        <p className="text-slate-500 max-w-sm mb-8">
+          Please sign in to access the Workforce Intelligence module and manage your digital employee profiles.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div id="workforce-view" className="space-y-8">
@@ -50,11 +145,11 @@ export function Workforce() {
         </div>
         <div className="flex gap-3">
           <button 
-            id="btn-performance-reviews" 
-            onClick={triggerToast}
-            className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors"
+            onClick={() => setIsAddModalOpen(true)}
+            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition-colors flex items-center gap-2"
           >
-            Performance Reviews
+            <Plus className="w-4 h-4" />
+            Add Employee
           </button>
           <button 
             id="btn-predictive-analysis" 
@@ -113,22 +208,13 @@ export function Workforce() {
                     <p className="text-blue-600 text-sm font-medium">{employee.role}</p>
                     <p className="text-slate-500 text-xs mt-1">{employee.department} Department</p>
                     <div className="flex gap-3 mt-3">
-                      <button 
-                        onClick={triggerToast}
-                        className="p-2 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-lg transition-all"
-                      >
+                      <button className="p-2 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-lg transition-all">
                         <Mail className="w-4 h-4" />
                       </button>
-                      <button 
-                        onClick={triggerToast}
-                        className="p-2 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-lg transition-all"
-                      >
+                      <button className="p-2 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-lg transition-all">
                         <Phone className="w-4 h-4" />
                       </button>
-                      <button 
-                        onClick={triggerToast}
-                        className="p-2 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-lg transition-all"
-                      >
+                      <button className="p-2 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-lg transition-all">
                         <Calendar className="w-4 h-4" />
                       </button>
                     </div>
@@ -148,6 +234,12 @@ export function Workforce() {
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${employee.performanceScore}%` }} />
                     </div>
+                    {employee.nextReviewDate && (
+                      <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        Next Review: {new Date(employee.nextReviewDate).toLocaleDateString()}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -178,15 +270,18 @@ export function Workforce() {
                           <span className="text-sm font-bold text-slate-700">{employee.sentiment}</span>
                         </div>
                       </div>
-                      <button 
-                        onClick={triggerToast}
-                        className="p-2 text-slate-400 hover:text-slate-600 rounded-lg"
-                      >
+                      <button className="p-2 text-slate-400 hover:text-slate-600 rounded-lg">
                         <MoreVertical className="w-5 h-5" />
                       </button>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Resignation Prob.</p>
+                      {employee.visaExpiry && (
+                        <p className="text-[10px] text-rose-500 flex items-center gap-1 justify-end font-bold">
+                          <ShieldAlert className="w-3 h-3" />
+                          Visa: {new Date(employee.visaExpiry).toLocaleDateString()}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mt-1">Resignation Prob.</p>
                       <p className="text-sm font-bold text-slate-900">{employee.resignationProbability}%</p>
                     </div>
                   </div>
@@ -195,7 +290,7 @@ export function Workforce() {
 
               {/* KPIs */}
               <div className="mt-6 pt-6 border-t border-slate-50 flex flex-wrap gap-6">
-                {employee.kpis.map((kpi) => (
+                {employee.kpis?.map((kpi) => (
                   <div key={kpi.name} className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-xl">
                     <div className="w-2 h-2 bg-blue-500 rounded-full" />
                     <div>
@@ -211,16 +306,151 @@ export function Workforce() {
           <div className="bg-white p-12 rounded-2xl border border-dashed border-slate-200 text-center">
             <Users className="w-12 h-12 text-slate-200 mx-auto mb-4" />
             <h3 className="text-lg font-bold text-slate-900">No employees found</h3>
-            <p className="text-slate-500">Try adjusting your search query.</p>
+            <p className="text-slate-500">Start by adding your first digital employee profile.</p>
             <button 
-              onClick={() => setSearchQuery('')}
-              className="mt-4 text-blue-600 font-bold hover:text-blue-700"
+              onClick={() => setIsAddModalOpen(true)}
+              className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all"
             >
-              Clear search
+              Add Employee
             </button>
           </div>
         )}
       </div>
+
+      {/* Add Employee Modal */}
+      <AnimatePresence>
+        {isAddModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              onClick={() => setIsAddModalOpen(false)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden"
+            >
+              <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h3 className="text-xl font-bold text-slate-900">New Employee Profile</h3>
+                <button onClick={() => setIsAddModalOpen(false)} className="p-2 hover:bg-white rounded-xl transition-colors">
+                  <X className="w-6 h-6 text-slate-400" />
+                </button>
+              </div>
+              <form onSubmit={handleAddEmployee} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Full Name</label>
+                    <input 
+                      required
+                      type="text" 
+                      value={newEmployee.name}
+                      onChange={e => setNewEmployee({...newEmployee, name: e.target.value})}
+                      className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 transition-all"
+                      placeholder="e.g. John Doe"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Email Address</label>
+                    <input 
+                      required
+                      type="email" 
+                      value={newEmployee.email}
+                      onChange={e => setNewEmployee({...newEmployee, email: e.target.value})}
+                      className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 transition-all"
+                      placeholder="john@company.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Job Role</label>
+                    <input 
+                      required
+                      type="text" 
+                      value={newEmployee.role}
+                      onChange={e => setNewEmployee({...newEmployee, role: e.target.value})}
+                      className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 transition-all"
+                      placeholder="e.g. Senior Architect"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Department</label>
+                    <select 
+                      required
+                      value={newEmployee.department}
+                      onChange={e => setNewEmployee({...newEmployee, department: e.target.value})}
+                      className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 transition-all"
+                    >
+                      <option value="">Select Department</option>
+                      <option value="Engineering">Engineering</option>
+                      <option value="Design">Design</option>
+                      <option value="Operations">Operations</option>
+                      <option value="HR">HR</option>
+                      <option value="Marketing">Marketing</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Join Date</label>
+                    <input 
+                      required
+                      type="date" 
+                      value={newEmployee.joinDate}
+                      onChange={e => setNewEmployee({...newEmployee, joinDate: e.target.value})}
+                      className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Visa Expiry (Compliance)</label>
+                    <input 
+                      type="date" 
+                      value={newEmployee.visaExpiry}
+                      onChange={e => setNewEmployee({...newEmployee, visaExpiry: e.target.value})}
+                      className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 transition-all border-l-4 border-rose-500"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Next Performance Review</label>
+                    <input 
+                      type="date" 
+                      value={newEmployee.nextReviewDate}
+                      onChange={e => setNewEmployee({...newEmployee, nextReviewDate: e.target.value})}
+                      className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 transition-all border-l-4 border-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Burnout Risk (%)</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="100"
+                      value={newEmployee.burnoutRisk}
+                      onChange={e => setNewEmployee({...newEmployee, burnoutRisk: parseInt(e.target.value)})}
+                      className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
+                <div className="pt-4 flex gap-4">
+                  <button 
+                    type="button"
+                    onClick={() => setIsAddModalOpen(false)}
+                    className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20"
+                  >
+                    Create Profile
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Toast Notification */}
       <AnimatePresence>

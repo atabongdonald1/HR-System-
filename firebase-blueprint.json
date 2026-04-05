@@ -25,17 +25,78 @@
             "culturalFit": { "type": "number" },
             "summary": { "type": "string" }
           }
-        },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "updatedAt": { "type": "string", "format": "date-time" }
+        }
       },
       "required": ["id", "name", "email", "role", "status"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "An employee record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "department": { "type": "string" },
+        "joinDate": { "type": "string", "format": "date" },
+        "visaExpiry": { "type": "string", "format": "date" },
+        "nextReviewDate": { "type": "string", "format": "date" },
+        "salary": { "type": "number" },
+        "currency": { "type": "string" },
+        "performanceScore": { "type": "number" },
+        "burnoutRisk": { "type": "number" },
+        "resignationProbability": { "type": "number" },
+        "sentiment": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role", "department", "joinDate", "salary", "currency"]
+    },
+    "JobPost": {
+      "title": "JobPost",
+      "description": "A job posting",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "department": { "type": "string" },
+        "location": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "title", "department", "location", "status"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A system notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "priority": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["id", "title", "message", "type", "priority", "timestamp", "read"]
     }
   },
   "firestore": {
     "/candidates/{candidateId}": {
       "schema": "Candidate",
       "description": "Collection of job candidates"
+    },
+    "/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Collection of employees"
+    },
+    "/jobs/{jobId}": {
+      "schema": "JobPost",
+      "description": "Collection of job postings"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Collection of system notifications"
     }
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Wallet, 
   ArrowUpRight, 
@@ -17,32 +17,49 @@ import {
   Cell, 
   ResponsiveContainer,
   BarChart,
-  Bar,
+  Bar, 
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip
 } from 'recharts';
-import { MOCK_EMPLOYEES } from '../constants';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { Employee } from '../types';
 
-const PAYROLL_STATS = [
-  { name: 'Basic Salary', value: 450000, color: '#2563eb' },
-  { name: 'Allowances', value: 120000, color: '#4f46e5' },
-  { name: 'Bonuses', value: 45000, color: '#10b981' },
-  { name: 'Deductions', value: 15000, color: '#f43f5e' },
-];
+const PAYROLL_STATS: any[] = [];
 
 export function Payroll() {
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [showToast, setShowToast] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      setIsAuthReady(!!user);
+    });
+
+    if (auth.currentUser) {
+      const unsubscribe = onSnapshot(collection(db, 'employees'), (snapshot) => {
+        const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
+        setEmployees(fetched);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'employees');
+      });
+      return () => unsubscribe();
+    }
+
+    return () => unsubscribeAuth();
+  }, [isAuthReady]);
 
   const triggerToast = () => {
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
   };
 
-  const totalPayroll = PAYROLL_STATS.reduce((acc, curr) => acc + (curr.name !== 'Deductions' ? curr.value : -curr.value), 0);
+  const totalPayroll = employees.reduce((acc, emp) => acc + emp.salary, 0);
 
   return (
     <div id="payroll-view" className="space-y-8">
@@ -79,11 +96,11 @@ export function Payroll() {
             <h3 className="text-lg font-bold text-slate-900">Monthly Summary</h3>
           </div>
           <div className="space-y-1">
-            <p className="text-slate-500 text-sm">Total Disbursement (March)</p>
+            <p className="text-slate-500 text-sm">Total Disbursement (Current)</p>
             <h4 className="text-3xl font-bold text-slate-900">AED {totalPayroll.toLocaleString()}</h4>
             <div className="flex items-center gap-1 text-emerald-600 text-xs font-bold mt-2">
               <ArrowUpRight className="w-3 h-3" />
-              4.2% from last month
+              0% from last month
             </div>
           </div>
 
@@ -148,7 +165,7 @@ export function Payroll() {
                 </div>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-blue-700 bg-blue-100 px-2 py-1 rounded-full">Next Cycle</span>
               </div>
-              <h4 className="text-lg font-bold text-blue-900">April Payroll</h4>
+              <h4 className="text-lg font-bold text-blue-900">Next Payroll</h4>
               <p className="text-blue-700 text-sm mt-1">Scheduled for disbursement in 24 days.</p>
               <button 
                 onClick={triggerToast}
@@ -170,25 +187,32 @@ export function Payroll() {
               </button>
             </div>
             <div className="space-y-4">
-              {MOCK_EMPLOYEES.slice(0, 3).map((employee) => (
-                <div key={employee.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-all group">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                      <FileText className="w-5 h-5 text-slate-400" />
+              {employees.length > 0 ? (
+                employees.slice(0, 3).map((employee) => (
+                  <div key={employee.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-all group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                        <FileText className="w-5 h-5 text-slate-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">{employee.name}</p>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Current Period • {employee.salary.toLocaleString()} {employee.currency}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-slate-900">{employee.name}</p>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">March 2024 • {employee.salary.toLocaleString()} {employee.currency}</p>
-                    </div>
+                    <button 
+                      onClick={triggerToast}
+                      className="p-2 text-slate-400 group-hover:text-blue-600 transition-all"
+                    >
+                      <Download className="w-5 h-5" />
+                    </button>
                   </div>
-                  <button 
-                    onClick={triggerToast}
-                    className="p-2 text-slate-400 group-hover:text-blue-600 transition-all"
-                  >
-                    <Download className="w-5 h-5" />
-                  </button>
+                ))
+              ) : (
+                <div className="p-8 text-center bg-slate-50 rounded-xl">
+                  <FileText className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+                  <p className="text-slate-500 text-sm">No recent payslips found.</p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>

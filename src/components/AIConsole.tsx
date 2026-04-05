@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Send, 
   Bot, 
@@ -7,17 +7,21 @@ import {
   Terminal,
   Cpu,
   BrainCircuit,
-  ShieldAlert
+  ShieldAlert,
+  Loader2
 } from 'lucide-react';
 import { geminiService } from '../services/geminiService';
-import { MOCK_CANDIDATES, MOCK_EMPLOYEES, MOCK_JOBS } from '../constants';
 import { cn } from '../lib/utils';
 import Markdown from 'react-markdown';
+import { db } from '../lib/firebase';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { Candidate, Employee, JobPost } from '../types';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  isToolCall?: boolean;
 }
 
 export function AIConsole() {
@@ -30,6 +34,29 @@ export function AIConsole() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Real data from Firestore
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [jobs, setJobs] = useState<JobPost[]>([]);
+
+  useEffect(() => {
+    const unsubCandidates = onSnapshot(collection(db, 'candidates'), (snapshot) => {
+      setCandidates(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Candidate));
+    });
+    const unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
+      setEmployees(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee));
+    });
+    const unsubJobs = onSnapshot(collection(db, 'jobs'), (snapshot) => {
+      setJobs(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as JobPost));
+    });
+
+    return () => {
+      unsubCandidates();
+      unsubEmployees();
+      unsubJobs();
+    };
+  }, []);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -46,23 +73,50 @@ export function AIConsole() {
 
     try {
       const context = {
-        candidates: MOCK_CANDIDATES,
-        employees: MOCK_EMPLOYEES,
-        jobs: MOCK_JOBS,
+        candidates,
+        employees,
+        jobs,
         region: 'UAE'
       };
       
       const response = await geminiService.getHRRecommendation(input, context);
       
+      let finalContent = response.text || "";
+      
+      // Handle tool calls
+      if (response.functionCalls) {
+        for (const call of response.functionCalls) {
+          finalContent += `\n\n**[NEXA-HR Action: ${call.name}]**\n`;
+          if (call.name === 'generateJobPost') {
+            finalContent += `Generating job description for ${call.args.role}...`;
+            // In a real app, we'd call the actual function and maybe update state/DB
+          } else if (call.name === 'sourceTalent') {
+            finalContent += `Activating NEXA-SOURCE for ${call.args.location || 'global'} talent pool...`;
+          } else if (call.name === 'analyzeCandidateCV') {
+            finalContent += `Analyzing CV data for structural assessment...`;
+          } else if (call.name === 'checkCompliance') {
+            finalContent += `Verifying compliance against UAE Labor Law...`;
+          } else if (call.name === 'generatePolicy') {
+            finalContent += `Generating comprehensive HR policy for ${call.args.policyName}...`;
+          }
+        }
+      }
+      
       const assistantMessage: Message = {
         role: 'assistant',
-        content: response || "I encountered an error processing your request.",
-        timestamp: new Date()
+        content: finalContent || "I encountered an error processing your request.",
+        timestamp: new Date(),
+        isToolCall: !!response.functionCalls
       };
       
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error(error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: "I encountered a neural link error. Please check your connection to the NEXA core.",
+        timestamp: new Date()
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -168,7 +222,8 @@ export function AIConsole() {
             "Analyze housekeeping supervisor CVs",
             "Generate JD for Logistics Driver",
             "Check UAE labor law compliance",
-            "Predict burnout risk for Intelligence dept"
+            "Predict burnout risk for Intelligence dept",
+            "Generate Remote Work Policy"
           ].map((suggestion) => (
             <button 
               key={suggestion}

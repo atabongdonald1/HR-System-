@@ -3,14 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { Recruitment } from './components/Recruitment';
 import { Workforce } from './components/Workforce';
 import { Compliance } from './components/Compliance';
 import { Payroll } from './components/Payroll';
+import { Performance } from './components/Performance';
+import { SearchResults } from './components/SearchResults';
 import { AIConsole } from './components/AIConsole';
+import { Settings } from './components/Settings';
+import { NotificationPanel } from './components/NotificationPanel';
 import { 
   Bell, 
   Search, 
@@ -18,14 +22,18 @@ import {
   ChevronRight,
   ChevronDown,
   Calendar,
-  Filter,
   User,
   Users,
-  Briefcase
+  Briefcase,
+  BrainCircuit
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { MOCK_CANDIDATES, MOCK_EMPLOYEES, MOCK_JOBS } from './constants';
+import { db, auth } from './lib/firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { Employee } from './types';
+import { notificationService } from './services/notificationService';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -33,56 +41,143 @@ export default function App() {
   const [dateRange, setDateRange] = useState('Anytime');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [lastSearchQuery, setLastSearchQuery] = useState('');
+  const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [globalToast, setGlobalToast] = useState<{ show: boolean, message: string }>({ show: false, message: '' });
 
-  const getSearchResults = () => {
+  const triggerGlobalToast = (message: string) => {
+    setGlobalToast({ show: true, message });
+    setTimeout(() => setGlobalToast({ show: false, message: '' }), 3000);
+  };
+
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // Fetch Employees for proactive alerts and search
+        const unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
+          const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
+          setEmployees(fetched);
+        });
+
+        // Fetch Candidates for search
+        const unsubCandidates = onSnapshot(collection(db, 'candidates'), (snapshot) => {
+          const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+          setCandidates(fetched);
+        });
+
+        // Fetch Jobs for search
+        const unsubJobs = onSnapshot(collection(db, 'jobs'), (snapshot) => {
+          const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+          setJobs(fetched);
+        });
+
+        // Fetch Unread Notifications count
+        const unsubNotifications = onSnapshot(collection(db, 'notifications'), (snapshot) => {
+          const unreadCount = snapshot.docs.filter(d => !d.data().read).length;
+          setUnreadNotifications(unreadCount);
+        });
+
+        return () => {
+          unsubEmployees();
+          unsubCandidates();
+          unsubJobs();
+          unsubNotifications();
+        };
+      }
+    });
+
+    return () => unsubAuth();
+  }, []);
+
+  useEffect(() => {
+    if (employees.length > 0) {
+      const timer = setTimeout(() => {
+        notificationService.generateProactiveAlerts(employees);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [employees.length]);
+
+  const getSearchResults = (limit?: number) => {
     if (!searchQuery.trim()) return [];
     
-    const query = searchQuery.toLowerCase();
+    const queryStr = searchQuery.toLowerCase();
     const results: any[] = [];
 
     if (searchScope === 'All' || searchScope === 'Candidates') {
-      MOCK_CANDIDATES.forEach(c => {
-        if (c.name.toLowerCase().includes(query) || c.role.toLowerCase().includes(query)) {
+      candidates.forEach(c => {
+        if (c.name?.toLowerCase().includes(queryStr) || c.role?.toLowerCase().includes(queryStr)) {
           results.push({ ...c, type: 'Candidate', icon: User });
         }
       });
     }
 
     if (searchScope === 'All' || searchScope === 'Employees') {
-      MOCK_EMPLOYEES.forEach(e => {
-        if (e.name.toLowerCase().includes(query) || e.role.toLowerCase().includes(query) || e.department.toLowerCase().includes(query)) {
+      employees.forEach(e => {
+        if (e.name?.toLowerCase().includes(queryStr) || e.role?.toLowerCase().includes(queryStr) || e.department?.toLowerCase().includes(queryStr)) {
           results.push({ ...e, type: 'Employee', icon: Users });
         }
       });
     }
 
     if (searchScope === 'All' || searchScope === 'Jobs') {
-      MOCK_JOBS.forEach(j => {
-        if (j.title.toLowerCase().includes(query) || j.department.toLowerCase().includes(query)) {
+      jobs.forEach(j => {
+        if (j.title?.toLowerCase().includes(queryStr) || j.department?.toLowerCase().includes(queryStr)) {
           results.push({ ...j, type: 'Job Post', icon: Briefcase });
         }
       });
     }
 
-    return results.slice(0, 5); // Limit to 5 results
+    return limit ? results.slice(0, limit) : results;
   };
 
-  const searchResults = getSearchResults();
+  const searchResults = getSearchResults(5);
+  const fullSearchResults = getSearchResults();
+
+  const handleSearchTrigger = () => {
+    if (searchQuery.trim()) {
+      setLastSearchQuery(searchQuery);
+      setActiveTab('search-results');
+      setIsSearchExpanded(false);
+    }
+  };
 
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard onGenerateInsights={() => setActiveTab('console')} />;
       case 'recruitment':
         return <Recruitment />;
       case 'workforce':
         return <Workforce />;
+      case 'performance':
+        return <Performance />;
       case 'compliance':
         return <Compliance />;
       case 'payroll':
         return <Payroll />;
+      case 'search-results':
+        return (
+          <SearchResults 
+            query={lastSearchQuery} 
+            results={fullSearchResults} 
+            onResultClick={(result) => {
+              if (result.type === 'Candidate' || result.type === 'Job Post') {
+                setActiveTab('recruitment');
+              } else if (result.type === 'Employee') {
+                setActiveTab('workforce');
+              }
+            }}
+          />
+        );
       case 'console':
         return <AIConsole />;
+      case 'settings':
+        return <Settings />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-[60vh] text-slate-400">
@@ -105,8 +200,12 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans text-slate-900">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+    <div className="flex h-screen bg-slate-50 font-sans text-slate-900 relative">
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        onAction={(msg) => triggerGlobalToast(msg)}
+      />
       
       <main id="main-content" className="flex-1 flex flex-col overflow-hidden">
         {/* Top Header */}
@@ -118,7 +217,7 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-6">
-            <div id="global-search-container" className="flex items-center gap-2">
+            <div id="global-search-container" className="flex items-center gap-3">
               <div className="relative group">
                 <div className={cn(
                   "flex items-center bg-slate-100 rounded-xl border border-transparent focus-within:bg-white focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all overflow-hidden",
@@ -150,7 +249,11 @@ export default function App() {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onFocus={() => setIsSearchExpanded(true)}
-                      onBlur={() => !searchQuery && setIsSearchExpanded(false)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSearchTrigger();
+                        }
+                      }}
                       placeholder={`Search ${searchScope === 'All' ? 'everything' : searchScope.toLowerCase()}...`} 
                       className="w-full pl-10 pr-4 py-2 bg-transparent border-none text-sm focus:ring-0"
                     />
@@ -223,11 +326,7 @@ export default function App() {
                       </div>
                       <div className="p-3 bg-slate-50 text-center">
                         <button 
-                          onClick={() => {
-                            setIsSearchExpanded(false);
-                            setSearchQuery('');
-                            alert('Full search results view is being optimized.');
-                          }}
+                          onClick={handleSearchTrigger}
                           className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
                         >
                           View All Results
@@ -237,30 +336,43 @@ export default function App() {
                   )}
                 </AnimatePresence>
               </div>
+              <button 
+                id="btn-global-search-trigger"
+                onClick={handleSearchTrigger}
+                className="p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center shrink-0"
+              >
+                <Search className="w-5 h-5" />
+              </button>
             </div>
             
             <div className="flex items-center gap-4 border-l border-slate-200 pl-6">
               <button 
                 id="btn-notifications" 
-                onClick={() => alert('You have 3 new notifications from NEXA-HR Intelligence.')}
+                onClick={() => setIsNotificationPanelOpen(true)}
                 className="relative p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
               >
                 <Bell className="w-5 h-5" />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
+                {unreadNotifications > 0 && (
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
+                )}
               </button>
               <button 
                 id="btn-help" 
-                onClick={() => alert('NEXA-HR Help Center is coming soon.')}
+                onClick={() => triggerGlobalToast('NEXA-HR Help Center is coming soon.')}
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
               >
                 <HelpCircle className="w-5 h-5" />
               </button>
-              <div id="user-profile-summary" className="flex items-center gap-3 ml-2">
+              <div 
+                id="user-profile-summary" 
+                onClick={() => setActiveTab('settings')}
+                className="flex items-center gap-3 ml-2 cursor-pointer hover:opacity-80 transition-opacity group"
+              >
                 <div className="text-right hidden sm:block">
-                  <p className="text-sm font-bold text-slate-900">Donald Atabong</p>
+                  <p className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">Donald Atabong</p>
                   <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">System Admin</p>
                 </div>
-                <div id="user-avatar" className="w-10 h-10 bg-slate-200 rounded-xl border-2 border-white shadow-sm overflow-hidden">
+                <div id="user-avatar" className="w-10 h-10 bg-slate-200 rounded-xl border-2 border-white shadow-sm overflow-hidden group-hover:border-blue-100 transition-all">
                   <img 
                     src="https://api.dicebear.com/7.x/avataaars/svg?seed=Donald" 
                     alt="User" 
@@ -279,7 +391,46 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      {/* Floating AI Agent Bubble */}
+      <motion.button
+        id="floating-ai-bubble"
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={() => setActiveTab('console')}
+        className="fixed bottom-8 right-8 w-16 h-16 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-2xl shadow-slate-900/40 z-50 group border-4 border-blue-500/20"
+      >
+        <div className="absolute inset-0 bg-blue-500/10 rounded-full animate-ping group-hover:hidden" />
+        <BrainCircuit className="w-8 h-8 text-blue-400" />
+        <div className="absolute -top-12 right-0 bg-white text-slate-900 px-4 py-2 rounded-2xl shadow-xl text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border border-slate-100">
+          Activate NEXA-HR Core
+        </div>
+      </motion.button>
+
+      <NotificationPanel 
+        isOpen={isNotificationPanelOpen} 
+        onClose={() => setIsNotificationPanelOpen(false)} 
+      />
+
+      {/* Global Toast */}
+      <AnimatePresence>
+        {globalToast.show && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-28 right-8 z-[100] bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-800"
+          >
+            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+              <BrainCircuit className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-sm">System Message</p>
+              <p className="text-slate-400 text-xs">{globalToast.message}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
-
