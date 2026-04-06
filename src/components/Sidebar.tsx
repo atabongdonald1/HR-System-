@@ -19,6 +19,8 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onAction?: (message: string) => void;
+  isAuthReady: boolean;
+  onLogin?: () => void;
 }
 
 const navItems = [
@@ -31,7 +33,7 @@ const navItems = [
   { id: 'console', label: 'AI Console', icon: MessageSquare },
 ];
 
-export function Sidebar({ activeTab, setActiveTab, onAction }: SidebarProps) {
+export function Sidebar({ activeTab, setActiveTab, onAction, isAuthReady, onLogin }: SidebarProps) {
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -90,13 +92,23 @@ export function Sidebar({ activeTab, setActiveTab, onAction }: SidebarProps) {
           <Settings className="w-5 h-5" />
           <span className="font-medium">Settings</span>
         </button>
-        <button 
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-900/20 transition-all"
-        >
-          <LogOut className="w-5 h-5" />
-          <span className="font-medium">Logout</span>
-        </button>
+        {isAuthReady ? (
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-900/20 transition-all"
+          >
+            <LogOut className="w-5 h-5" />
+            <span className="font-medium">Logout</span>
+          </button>
+        ) : (
+          <button 
+            onClick={onLogin}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all"
+          >
+            <LogOut className="w-5 h-5 rotate-180" />
+            <span className="font-medium">Login</span>
+          </button>
+        )}
       </div>
     </div>
   );

@@ -33,10 +33,11 @@ import { db, auth } from './lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { Employee } from './types';
 import { notificationService } from './services/notificationService';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [searchScope, setSearchScope] = useState('All');
   const [dateRange, setDateRange] = useState('Anytime');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
@@ -55,42 +56,44 @@ export default function App() {
   };
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        // Fetch Employees for proactive alerts and search
-        const unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
-          const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
-          setEmployees(fetched);
-        });
-
-        // Fetch Candidates for search
-        const unsubCandidates = onSnapshot(collection(db, 'candidates'), (snapshot) => {
-          const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-          setCandidates(fetched);
-        });
-
-        // Fetch Jobs for search
-        const unsubJobs = onSnapshot(collection(db, 'jobs'), (snapshot) => {
-          const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-          setJobs(fetched);
-        });
-
-        // Fetch Unread Notifications count
-        const unsubNotifications = onSnapshot(collection(db, 'notifications'), (snapshot) => {
-          const unreadCount = snapshot.docs.filter(d => !d.data().read).length;
-          setUnreadNotifications(unreadCount);
-        });
-
-        return () => {
-          unsubEmployees();
-          unsubCandidates();
-          unsubJobs();
-          unsubNotifications();
-        };
-      }
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      setIsAuthReady(!!user);
     });
 
-    return () => unsubAuth();
+    return () => unsubscribeAuth();
+  }, []);
+
+  useEffect(() => {
+    // Fetch Employees for proactive alerts and search
+    const unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
+      setEmployees(fetched);
+    });
+
+    // Fetch Candidates for search
+    const unsubCandidates = onSnapshot(collection(db, 'candidates'), (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      setCandidates(fetched);
+    });
+
+    // Fetch Jobs for search
+    const unsubJobs = onSnapshot(collection(db, 'jobs'), (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      setJobs(fetched);
+    });
+
+    // Fetch Unread Notifications count
+    const unsubNotifications = onSnapshot(collection(db, 'notifications'), (snapshot) => {
+      const unreadCount = snapshot.docs.filter(d => !d.data().read).length;
+      setUnreadNotifications(unreadCount);
+    });
+
+    return () => {
+      unsubEmployees();
+      unsubCandidates();
+      unsubJobs();
+      unsubNotifications();
+    };
   }, []);
 
   useEffect(() => {
@@ -147,6 +150,30 @@ export default function App() {
   };
 
   const renderContent = () => {
+    const publicTabs = ['dashboard', 'recruitment', 'workforce', 'search-results'];
+    const isPublic = publicTabs.includes(activeTab);
+
+    if (!isPublic && !isAuthReady) {
+      return (
+        <div className="flex flex-col items-center justify-center h-[70vh] bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-12 text-center">
+          <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6">
+            <BrainCircuit className="w-10 h-10 text-blue-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Secure Access Required</h2>
+          <p className="text-slate-500 max-w-sm mb-8 leading-relaxed">
+            This module contains sensitive organizational data. Please sign in with your authorized account to proceed.
+          </p>
+          <button 
+            onClick={handleLogin}
+            className="flex items-center gap-3 px-8 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20"
+          >
+            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
+            Sign in with Google
+          </button>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard onGenerateInsights={() => setActiveTab('console')} />;
@@ -199,12 +226,24 @@ export default function App() {
     }
   };
 
+  const handleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Login failed:", error);
+      triggerGlobalToast("Authentication failed. Please try again.");
+    }
+  };
+
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-900 relative">
       <Sidebar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         onAction={(msg) => triggerGlobalToast(msg)}
+        isAuthReady={isAuthReady}
+        onLogin={handleLogin}
       />
       
       <main id="main-content" className="flex-1 flex flex-col overflow-hidden">
@@ -346,6 +385,14 @@ export default function App() {
             </div>
             
             <div className="flex items-center gap-4 border-l border-slate-200 pl-6">
+              {!isAuthReady && (
+                <button 
+                  onClick={handleLogin}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
+                >
+                  Login
+                </button>
+              )}
               <button 
                 id="btn-notifications" 
                 onClick={() => setIsNotificationPanelOpen(true)}
@@ -365,19 +412,27 @@ export default function App() {
               </button>
               <div 
                 id="user-profile-summary" 
-                onClick={() => setActiveTab('settings')}
+                onClick={() => isAuthReady ? setActiveTab('settings') : handleLogin()}
                 className="flex items-center gap-3 ml-2 cursor-pointer hover:opacity-80 transition-opacity group"
               >
                 <div className="text-right hidden sm:block">
-                  <p className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">Donald Atabong</p>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">System Admin</p>
+                  <p className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                    {isAuthReady ? (auth.currentUser?.displayName || 'Donald Atabong') : 'Guest User'}
+                  </p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+                    {isAuthReady ? 'System Admin' : 'Public Access'}
+                  </p>
                 </div>
-                <div id="user-avatar" className="w-10 h-10 bg-slate-200 rounded-xl border-2 border-white shadow-sm overflow-hidden group-hover:border-blue-100 transition-all">
-                  <img 
-                    src="https://api.dicebear.com/7.x/avataaars/svg?seed=Donald" 
-                    alt="User" 
-                    className="w-full h-full object-cover"
-                  />
+                <div id="user-avatar" className="w-10 h-10 bg-slate-200 rounded-xl border-2 border-white shadow-sm overflow-hidden group-hover:border-blue-100 transition-all flex items-center justify-center">
+                  {isAuthReady ? (
+                    <img 
+                      src={auth.currentUser?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=Donald"} 
+                      alt="User" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-5 h-5 text-slate-400" />
+                  )}
                 </div>
               </div>
             </div>

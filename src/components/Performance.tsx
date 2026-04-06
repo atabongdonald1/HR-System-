@@ -67,42 +67,20 @@ export function Performance() {
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      setIsAuthReady(!!user);
+    const unsubscribe = onSnapshot(collection(db, 'employees'), (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
+      setEmployees(fetched);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'employees');
     });
-
-    if (auth.currentUser) {
-      const unsubscribe = onSnapshot(collection(db, 'employees'), (snapshot) => {
-        const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
-        setEmployees(fetched);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'employees');
-      });
-      return () => unsubscribe();
-    }
-
-    return () => unsubscribeAuth();
-  }, [isAuthReady]);
+    return () => unsubscribe();
+  }, []);
 
   const avgScore = employees.length > 0 
     ? (employees.reduce((acc, emp) => acc + emp.performanceScore, 0) / employees.length).toFixed(1)
     : "0";
 
   const topPerformers = employees.filter(e => e.performanceScore >= 90).length;
-
-  if (!isAuthReady) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-3xl border border-slate-100 shadow-sm p-12 text-center">
-        <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6">
-          <Award className="w-10 h-10 text-blue-600" />
-        </div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Performance Intelligence</h2>
-        <p className="text-slate-500 max-w-sm mb-8">
-          Please sign in to access performance analytics and review cycles.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div id="performance-view" className="space-y-8 pb-12">

@@ -37,22 +37,14 @@ export function Payroll() {
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      setIsAuthReady(!!user);
+    const unsubscribe = onSnapshot(collection(db, 'employees'), (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
+      setEmployees(fetched);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'employees');
     });
-
-    if (auth.currentUser) {
-      const unsubscribe = onSnapshot(collection(db, 'employees'), (snapshot) => {
-        const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
-        setEmployees(fetched);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'employees');
-      });
-      return () => unsubscribe();
-    }
-
-    return () => unsubscribeAuth();
-  }, [isAuthReady]);
+    return () => unsubscribe();
+  }, []);
 
   const triggerToast = () => {
     setShowToast(true);

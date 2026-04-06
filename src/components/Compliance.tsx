@@ -28,24 +28,16 @@ export function Compliance() {
   const [generatedPolicy, setGeneratedPolicy] = useState<any>(null);
 
   useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      setIsAuthReady(!!user);
+    const q = query(collection(db, 'employees'), orderBy('name', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as Employee[];
+      setEmployees(fetched);
     });
-
-    if (auth.currentUser) {
-      const q = query(collection(db, 'employees'), orderBy('name', 'asc'));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const fetched = snapshot.docs.map(doc => ({
-          ...doc.data(),
-          id: doc.id
-        })) as Employee[];
-        setEmployees(fetched);
-      });
-      return () => unsubscribe();
-    }
-
-    return () => unsubscribeAuth();
-  }, [isAuthReady]);
+    return () => unsubscribe();
+  }, []);
 
   const triggerToast = () => {
     setShowToast(true);

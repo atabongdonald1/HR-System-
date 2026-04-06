@@ -59,26 +59,18 @@ export function Workforce() {
   });
 
   useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      setIsAuthReady(!!user);
+    const q = query(collection(db, 'employees'), orderBy('name', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as Employee[];
+      setEmployees(fetched);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'employees');
     });
-
-    if (auth.currentUser) {
-      const q = query(collection(db, 'employees'), orderBy('name', 'asc'));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const fetched = snapshot.docs.map(doc => ({
-          ...doc.data(),
-          id: doc.id
-        })) as Employee[];
-        setEmployees(fetched);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'employees');
-      });
-      return () => unsubscribe();
-    }
-
-    return () => unsubscribeAuth();
-  }, [isAuthReady]);
+    return () => unsubscribe();
+  }, []);
 
   const triggerToast = () => {
     setShowToast(true);
@@ -135,20 +127,6 @@ export function Workforce() {
     employee.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
     employee.department.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  if (!isAuthReady) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-3xl border border-slate-100 shadow-sm p-12 text-center">
-        <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6">
-          <Users className="w-10 h-10 text-blue-600" />
-        </div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Access Restricted</h2>
-        <p className="text-slate-500 max-w-sm mb-8">
-          Please sign in to access the Workforce Intelligence module and manage your digital employee profiles.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div id="workforce-view" className="space-y-8">

@@ -89,42 +89,27 @@ service cloud.firestore {
     // ===============================================================
 
     match /candidates/{candidateId} {
-      allow read: if isAuthenticated() || isAdmin();
-      allow create: if (isAuthenticated() && isValidCandidate(request.resource.data)) || isAdmin();
-      allow update: if (isAuthenticated() && isValidCandidate(request.resource.data)) || isAdmin();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /employees/{employeeId} {
-      allow read: if isAuthenticated() || isAdmin();
-      allow create: if (isAuthenticated() && isValidEmployee(request.resource.data)) || isAdmin();
-      allow update: if (isAuthenticated() && isValidEmployee(request.resource.data)) || isAdmin();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /jobs/{jobId} {
-      allow read: if isAuthenticated() || isAdmin();
-      allow create: if (isAuthenticated() && isValidJob(request.resource.data)) || isAdmin();
-      allow update: if (isAuthenticated() && isValidJob(request.resource.data)) || isAdmin();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated() || isAdmin();
-      allow create: if (isAuthenticated() && isValidNotification(request.resource.data)) || isAdmin();
-      allow update: if (isAuthenticated() && isValidNotification(request.resource.data)) || isAdmin();
-      allow delete: if isAuthenticated() || isAdmin();
+      allow read, write: if true;
     }
 
     match /userPreferences/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create, update: if (isOwner(userId) && request.resource.data.notifications is map) || isAdmin();
+      allow read, write: if isOwner(userId) || isAdmin();
     }
 
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() && isOwner(userId) && request.resource.data.role == 'user';
-      allow update: if isAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role);
+      allow read, write: if isOwner(userId) || isAdmin();
     }
   }
 }

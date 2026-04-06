@@ -64,35 +64,27 @@ export function Dashboard({ onGenerateInsights }: DashboardProps) {
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      setIsAuthReady(!!user);
+    // Employees
+    const unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
+      setEmployees(fetched);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'employees');
     });
 
-    if (auth.currentUser) {
-      // Employees
-      const unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
-        const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
-        setEmployees(fetched);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'employees');
-      });
+    // Candidates
+    const unsubCandidates = onSnapshot(collection(db, 'candidates'), (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Candidate);
+      setCandidates(fetched);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'candidates');
+    });
 
-      // Candidates
-      const unsubCandidates = onSnapshot(collection(db, 'candidates'), (snapshot) => {
-        const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Candidate);
-        setCandidates(fetched);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'candidates');
-      });
-
-      return () => {
-        unsubEmployees();
-        unsubCandidates();
-      };
-    }
-
-    return () => unsubscribeAuth();
-  }, [isAuthReady]);
+    return () => {
+      unsubEmployees();
+      unsubCandidates();
+    };
+  }, []);
 
   const triggerToast = () => {
     setShowToast(true);
@@ -143,20 +135,6 @@ export function Dashboard({ onGenerateInsights }: DashboardProps) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return months.indexOf(a.name) - months.indexOf(b.name);
   });
-
-  if (!isAuthReady) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-3xl border border-slate-100 shadow-sm p-12 text-center">
-        <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6">
-          <Sparkles className="w-10 h-10 text-blue-600" />
-        </div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Welcome to NEXA-HR</h2>
-        <p className="text-slate-500 max-w-sm mb-8">
-          Please sign in to view your executive overview and access real-time workforce intelligence.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div id="dashboard-view" className="space-y-8">
