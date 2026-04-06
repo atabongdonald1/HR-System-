@@ -15,7 +15,8 @@ import {
   Plus,
   X,
   ShieldAlert,
-  Clock
+  Clock,
+  FileText
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -38,7 +39,6 @@ export function Workforce() {
   const [showToast, setShowToast] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isAuthReady, setIsAuthReady] = useState(false);
   const [toastMessage, setToastMessage] = useState({ title: 'Workforce Intelligence', description: 'NEXA-HR is analyzing workforce data.' });
 
   // New Employee State
@@ -262,12 +262,21 @@ export function Workforce() {
                           <span className="text-sm font-bold text-slate-700">{employee.sentiment}</span>
                         </div>
                       </div>
-                      <button 
-                        onClick={() => handleDeleteEmployee(employee.id)}
-                        className="p-2 text-slate-400 hover:text-rose-600 rounded-lg transition-all"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={triggerToast}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                          title="Sign Contract"
+                        >
+                          <FileText className="w-5 h-5" />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteEmployee(employee.id)}
+                          className="p-2 text-slate-400 hover:text-rose-600 rounded-lg transition-all"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
                     <div className="text-right">
                       {employee.visaExpiry && (

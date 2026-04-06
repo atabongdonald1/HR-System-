@@ -25,7 +25,10 @@ import {
   User,
   Users,
   Briefcase,
-  BrainCircuit
+  BrainCircuit,
+  LogOut,
+  ExternalLink,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -33,7 +36,8 @@ import { db, auth } from './lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { Employee } from './types';
 import { notificationService } from './services/notificationService';
-import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import firebaseConfig from '../firebase-applet-config.json';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -44,6 +48,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [lastSearchQuery, setLastSearchQuery] = useState('');
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
+  const [isFixLoginModalOpen, setIsFixLoginModalOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [candidates, setCandidates] = useState<any[]>([]);
@@ -150,30 +155,6 @@ export default function App() {
   };
 
   const renderContent = () => {
-    const publicTabs = ['dashboard', 'recruitment', 'workforce', 'search-results'];
-    const isPublic = publicTabs.includes(activeTab);
-
-    if (!isPublic && !isAuthReady) {
-      return (
-        <div className="flex flex-col items-center justify-center h-[70vh] bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-12 text-center">
-          <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6">
-            <BrainCircuit className="w-10 h-10 text-blue-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">Secure Access Required</h2>
-          <p className="text-slate-500 max-w-sm mb-8 leading-relaxed">
-            This module contains sensitive organizational data. Please sign in with your authorized account to proceed.
-          </p>
-          <button 
-            onClick={handleLogin}
-            className="flex items-center gap-3 px-8 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20"
-          >
-            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
-            Sign in with Google
-          </button>
-        </div>
-      );
-    }
-
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard onGenerateInsights={() => setActiveTab('console')} />;
@@ -230,9 +211,26 @@ export default function App() {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed:", error);
-      triggerGlobalToast("Authentication failed. Please try again.");
+      const errorCode = error.code || "unknown";
+      
+      if (errorCode === 'auth/unauthorized-domain') {
+        setIsFixLoginModalOpen(true);
+      } else if (errorCode === 'auth/popup-blocked') {
+        triggerGlobalToast("Login popup was blocked. Please enable popups for this site.");
+      } else {
+        triggerGlobalToast(`Authentication failed (${errorCode}). Please check your Firebase configuration.`);
+      }
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      triggerGlobalToast("Signed out successfully.");
+    } catch (error) {
+      console.error("Sign out failed:", error);
     }
   };
 
@@ -385,12 +383,28 @@ export default function App() {
             </div>
             
             <div className="flex items-center gap-4 border-l border-slate-200 pl-6">
-              {!isAuthReady && (
+              {!isAuthReady ? (
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setIsFixLoginModalOpen(true)}
+                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest px-2 py-1 hover:bg-blue-50 rounded-lg transition-all"
+                  >
+                    Fix Login Access
+                  </button>
+                  <button 
+                    onClick={handleLogin}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
+                  >
+                    Sign In
+                  </button>
+                </div>
+              ) : (
                 <button 
-                  onClick={handleLogin}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
+                  onClick={handleSignOut}
+                  className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                  title="Sign Out"
                 >
-                  Login
+                  <LogOut className="w-5 h-5" />
                 </button>
               )}
               <button 
@@ -466,6 +480,66 @@ export default function App() {
         isOpen={isNotificationPanelOpen} 
         onClose={() => setIsNotificationPanelOpen(false)} 
       />
+
+      {/* Fix Login Access Modal */}
+      <AnimatePresence>
+        {isFixLoginModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100"
+            >
+              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-6">
+                <ShieldCheck className="w-8 h-8 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Fix Login Access</h3>
+              <p className="text-slate-500 mb-6 leading-relaxed">
+                Firebase blocks logins from unauthorized domains. To allow other users to sign in, you must add this domain to your Firebase Console.
+              </p>
+              
+              <div className="space-y-4 mb-8">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1">Domain to Authorize</p>
+                  <div className="flex items-center justify-between">
+                    <code className="text-xs font-mono text-blue-600 font-bold">{window.location.hostname}</code>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(window.location.hostname);
+                        triggerGlobalToast("Domain copied to clipboard.");
+                      }}
+                      className="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+                
+                <a 
+                  href={`https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-between p-4 bg-blue-50 rounded-2xl border border-blue-100 hover:bg-blue-100 transition-all group"
+                >
+                  <div>
+                    <p className="text-sm font-bold text-blue-900">Firebase Console</p>
+                    <p className="text-[10px] text-blue-700">Open Auth Settings</p>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-blue-600 group-hover:translate-x-1 transition-transform" />
+                </a>
+              </div>
+
+              <button 
+                onClick={() => setIsFixLoginModalOpen(false)}
+                className="w-full px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all"
+              >
+                Got it
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Global Toast */}
       <AnimatePresence>

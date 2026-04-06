@@ -23,7 +23,6 @@ import Markdown from 'react-markdown';
 export function Compliance() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [showToast, setShowToast] = useState(false);
-  const [isAuthReady, setIsAuthReady] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedPolicy, setGeneratedPolicy] = useState<any>(null);
 
@@ -117,20 +116,6 @@ export function Compliance() {
   const highRiskCount = complianceChecks.filter(c => c.risk === 'High').length;
   const pendingCount = complianceChecks.filter(c => c.status === 'Pending' || c.status === 'Critical').length;
   const healthScore = employees.length > 0 ? Math.max(0, 100 - (complianceChecks.filter(c => c.risk === 'High').length * 10)) : 100;
-
-  if (!isAuthReady) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-3xl border border-slate-100 shadow-sm p-12 text-center">
-        <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6">
-          <ShieldCheck className="w-10 h-10 text-blue-600" />
-        </div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Compliance Access Restricted</h2>
-        <p className="text-slate-500 max-w-sm mb-8">
-          Please sign in to access the Compliance & Risk Control module and monitor your organization's health.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div id="compliance-view" className="space-y-8">
@@ -374,6 +359,12 @@ export function Compliance() {
                   className="text-blue-600 text-xs font-bold hover:underline"
                 >
                   View PDF
+                </button>
+                <button 
+                  onClick={triggerToast}
+                  className="px-3 py-1 bg-blue-600 text-white rounded-lg text-[10px] font-bold hover:bg-blue-700 transition-all shadow-sm"
+                >
+                  Sign
                 </button>
               </div>
             </div>

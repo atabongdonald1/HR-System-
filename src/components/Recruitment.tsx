@@ -63,7 +63,6 @@ export function Recruitment() {
   const [sourcingLocation, setSourcingLocation] = useState('');
   const [sourcingSkills, setSourcingSkills] = useState('');
   const [toastMessage, setToastMessage] = useState({ title: '', description: '' });
-  const [isAuthReady, setIsAuthReady] = useState(false);
   const [firebaseError, setFirebaseError] = useState<string | null>(null);
   
   // Filtering state
@@ -72,6 +71,12 @@ export function Recruitment() {
   const [roleFilter, setRoleFilter] = useState<string>('All');
   const [skillFilter, setSkillFilter] = useState<string>('All');
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+
+  useEffect(() => {
+    setStatusFilter('All');
+    setRoleFilter('All');
+    setSkillFilter('All');
+  }, [activeView]);
 
   const handleSchedule = (id: string) => {
     setSchedulingId(id);
@@ -251,8 +256,8 @@ export function Recruitment() {
       const newCandidate: Candidate = {
         id: Math.random().toString(36).substr(2, 9),
         name: analysis.name || file.name.split('.')[0],
-        email: analysis.email || `${analysis.name?.toLowerCase().replace(/\s/g, '.')}@example.com`,
-        phone: analysis.phone || '+971 50 000 0000',
+        email: analysis.email || 'Not found in CV',
+        phone: analysis.phone || 'Not found in CV',
         role: analysis.role || 'New Candidate',
         experience: analysis.experienceYears || 0,
         skills: analysis.skills || [],
@@ -324,8 +329,8 @@ export function Recruitment() {
       const newCandidates: Candidate[] = sourcedCandidates.map((c: any) => ({
         id: Math.random().toString(36).substr(2, 9),
         name: c.name,
-        email: c.email,
-        phone: c.phone || '+971 50 000 0000',
+        email: c.email || 'Not public',
+        phone: c.phone || 'Not public',
         role: c.role,
         experience: c.experience,
         skills: c.skills,
@@ -393,8 +398,8 @@ export function Recruitment() {
       const newCandidates: Candidate[] = collectedCandidates.map((c: any) => ({
         id: Math.random().toString(36).substr(2, 9),
         name: c.name,
-        email: c.email,
-        phone: c.phone || '+971 50 000 0000',
+        email: c.email || 'Not public',
+        phone: c.phone || 'Not public',
         role: c.role,
         experience: c.experience,
         skills: c.skills,
@@ -435,10 +440,17 @@ export function Recruitment() {
   };
 
   // Derived values for filters
-  const uniqueRoles = ['All', ...new Set(candidates.map(c => c.role))];
-  const uniqueStatuses = ['All', 'New', 'Screening', 'Interviewing', 'Offered', 'Hired', 'Rejected'];
-  const allSkills = candidates.flatMap(c => c.skills);
-  const uniqueSkills = ['All', ...new Set(allSkills)];
+  const uniqueRoles = activeView === 'candidates'
+    ? ['All', ...new Set(candidates.map(c => c.role))]
+    : ['All', ...new Set(jobs.map(j => j.department))];
+    
+  const uniqueStatuses = activeView === 'candidates'
+    ? ['All', 'New', 'Screening', 'Interviewing', 'Offered', 'Hired', 'Rejected']
+    : ['All', 'Open', 'Closed', 'Draft'];
+    
+  const uniqueSkills = activeView === 'candidates'
+    ? ['All', ...new Set(candidates.flatMap(c => c.skills))]
+    : ['All', ...new Set(jobs.flatMap(j => j.requirements))];
 
   const filteredCandidates = candidates.filter(candidate => {
     const matchesSearch = 
@@ -449,6 +461,19 @@ export function Recruitment() {
     const matchesStatus = statusFilter === 'All' || candidate.status === statusFilter;
     const matchesRole = roleFilter === 'All' || candidate.role === roleFilter;
     const matchesSkill = skillFilter === 'All' || candidate.skills.includes(skillFilter);
+
+    return matchesSearch && matchesStatus && matchesRole && matchesSkill;
+  });
+
+  const filteredJobs = jobs.filter(job => {
+    const matchesSearch = 
+      job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.requirements.some(r => r.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    const matchesStatus = statusFilter === 'All' || job.status === statusFilter;
+    const matchesRole = roleFilter === 'All' || job.department === roleFilter;
+    const matchesSkill = skillFilter === 'All' || job.requirements.includes(skillFilter);
 
     return matchesSearch && matchesStatus && matchesRole && matchesSkill;
   });
@@ -795,6 +820,22 @@ export function Recruitment() {
                         <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Hire Score</p>
                       </div>
                       <div className="flex flex-col gap-2">
+                        {candidate.status === 'Offered' && (
+                          <button 
+                            onClick={() => {
+                              setToastMessage({
+                                title: 'Offer Sent for Signature',
+                                description: `A digital signature request has been sent to ${candidate.name}.`
+                              });
+                              setShowToast(true);
+                              setTimeout(() => setShowToast(false), 3000);
+                            }}
+                            className="p-2 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-all"
+                            title="Sign Offer"
+                          >
+                            <FileText className="w-5 h-5" />
+                          </button>
+                        )}
                         <button 
                           onClick={() => {
                             setToastMessage({
@@ -909,8 +950,8 @@ export function Recruitment() {
             exit={{ opacity: 0, x: -20 }}
             className="grid grid-cols-1 md:grid-cols-2 gap-6"
           >
-            {jobs.length > 0 ? (
-              jobs.map((job) => (
+            {filteredJobs.length > 0 ? (
+              filteredJobs.map((job) => (
                 <div key={job.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
                   <div className="flex justify-between items-start mb-4">
                     <div>
@@ -948,10 +989,10 @@ export function Recruitment() {
                     </div>
                   </div>
                   <div className="space-y-3">
-                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Requirements</p>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Required Skills</p>
                     <div className="flex flex-wrap gap-2">
                       {job.requirements.map(req => (
-                        <span key={req} className="px-2 py-1 bg-slate-50 text-slate-600 rounded-lg text-xs">
+                        <span key={req} className="px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium border border-blue-100">
                           {req}
                         </span>
                       ))}
@@ -990,12 +1031,17 @@ export function Recruitment() {
               <div className="col-span-full bg-white p-12 rounded-2xl border border-dashed border-slate-200 text-center">
                 <Briefcase className="w-12 h-12 text-slate-200 mx-auto mb-4" />
                 <h3 className="text-lg font-bold text-slate-900">No job posts found</h3>
-                <p className="text-slate-500">Publish a new job to start recruiting.</p>
+                <p className="text-slate-500">Try adjusting your filters or publish a new job.</p>
                 <button 
-                  onClick={() => setIsAddModalOpen(true)}
+                  onClick={() => {
+                    setSearchQuery('');
+                    setStatusFilter('All');
+                    setRoleFilter('All');
+                    setSkillFilter('All');
+                  }}
                   className="mt-4 text-blue-600 font-bold hover:text-blue-700"
                 >
-                  Publish Job
+                  Clear all filters
                 </button>
               </div>
             )}
@@ -1450,7 +1496,7 @@ export function Recruitment() {
                         max: Number(maxStr) || 0,
                         currency: 'AED'
                       },
-                      description: formData.get('education') as string || 'Manually created job post.',
+                      description: (formData.get('description') as string) || 'Manually created job post.',
                       requirements: (formData.get('skills') as string).split(',').map(s => s.trim()),
                       screeningQuestions: [],
                       status: 'Open'
@@ -1539,8 +1585,8 @@ export function Recruitment() {
                     {activeView === 'candidates' ? 'Education' : 'Job Description'}
                   </label>
                   <textarea 
-                    name="education"
-                    rows={2}
+                    name={activeView === 'candidates' ? "education" : "description"}
+                    rows={activeView === 'candidates' ? 2 : 5}
                     placeholder={activeView === 'candidates' ? "e.g. MBA in Logistics" : "Describe the role and responsibilities..."}
                     className="w-full px-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 resize-none"
                   />

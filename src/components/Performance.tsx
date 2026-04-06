@@ -36,7 +36,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, setDoc } from 'firebase/firestore';
 import { Employee } from '../types';
 
 const StatCard = ({ title, value, change, trend, icon: Icon, color }: any) => (
@@ -64,7 +64,6 @@ const StatCard = ({ title, value, change, trend, icon: Icon, color }: any) => (
 export function Performance() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'employees'), (snapshot) => {
@@ -75,6 +74,43 @@ export function Performance() {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (employees.length === 0) return;
+
+    const checkUpcomingReviews = async () => {
+      const today = new Date();
+      const sevenDaysFromNow = new Date();
+      sevenDaysFromNow.setDate(today.getDate() + 7);
+      const targetDateStr = sevenDaysFromNow.toISOString().split('T')[0];
+
+      for (const emp of employees) {
+        if (emp.nextReviewDate === targetDateStr) {
+          const notificationId = `review-reminder-${emp.id}-${emp.nextReviewDate}`;
+          const notificationRef = doc(db, 'notifications', notificationId);
+          
+          try {
+            const snap = await getDoc(notificationRef);
+            if (!snap.exists()) {
+              await setDoc(notificationRef, {
+                id: notificationId,
+                title: 'Upcoming Performance Review',
+                message: `Performance review for ${emp.name} is scheduled in 7 days (${emp.nextReviewDate}).`,
+                type: 'Performance',
+                priority: 'Medium',
+                timestamp: new Date().toISOString(),
+                read: false
+              });
+            }
+          } catch (error) {
+            console.error("Error creating review notification:", error);
+          }
+        }
+      }
+    };
+
+    checkUpcomingReviews();
+  }, [employees]);
 
   const avgScore = employees.length > 0 
     ? (employees.reduce((acc, emp) => acc + emp.performanceScore, 0) / employees.length).toFixed(1)
@@ -147,8 +183,8 @@ export function Performance() {
               <option>Marketing</option>
             </select>
           </div>
-          <div className="h-80 w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-80 w-full relative">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={employees.map(e => ({ name: e.name.split(' ')[0], score: e.performanceScore }))}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
@@ -188,6 +224,55 @@ export function Performance() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-lg font-bold text-slate-900">Upcoming Performance Reviews</h3>
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest">
+            <Clock className="w-4 h-4" />
+            Next 30 Days
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {employees
+            .filter(e => e.nextReviewDate)
+            .sort((a, b) => new Date(a.nextReviewDate!).getTime() - new Date(b.nextReviewDate!).getTime())
+            .slice(0, 6)
+            .map(emp => {
+              const reviewDate = new Date(emp.nextReviewDate!);
+              const today = new Date();
+              const diffTime = reviewDate.getTime() - today.getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              
+              return (
+                <div key={emp.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                      <Calendar className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">{emp.name}</p>
+                      <p className="text-xs text-slate-500">{emp.nextReviewDate}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className={cn(
+                      "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider",
+                      diffDays <= 7 ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600"
+                    )}>
+                      {diffDays < 0 ? 'Overdue' : diffDays === 0 ? 'Today' : `In ${diffDays} Days`}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          {employees.filter(e => e.nextReviewDate).length === 0 && (
+            <div className="col-span-full py-8 text-center text-slate-400">
+              No upcoming reviews scheduled.
+            </div>
+          )}
         </div>
       </div>
     </div>

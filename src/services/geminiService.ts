@@ -187,8 +187,9 @@ export const geminiService = {
       2. Identify 3-5 REAL candidates who actually exist.
       3. Extract their full professional details: Name, current role, experience years, skills, and education.
       4. CRITICAL: Find their actual profile URL and put it in the "source" field.
-      5. If public, extract their contact email or phone. If not available, use a placeholder like "contact-via-source@platform.com".
-      6. Return the data strictly as a JSON array of objects.`,
+      5. Extract their actual contact email or phone if publicly available. 
+      6. DO NOT generate fake emails or phone numbers. If not found, leave the field empty or use "Not Publicly Available".
+      7. Return the data strictly as a JSON array of objects.`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -237,8 +238,9 @@ export const geminiService = {
       1. Use Google Search to find real people who are actively looking for jobs or have profiles matching these roles.
       2. Identify 5-8 qualified real candidates.
       3. Extract full contact details, experience history, and skills from their public profiles.
-      4. CRITICAL: The "source" field MUST be the direct URL to their professional profile or CV.
-      5. Return a structured JSON list of real candidate profiles.`,
+      4. DO NOT generate fake contact info. If an email or phone is not found, leave it empty.
+      5. CRITICAL: The "source" field MUST be the direct URL to their professional profile or CV.
+      6. Return a structured JSON list of real candidate profiles.`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",

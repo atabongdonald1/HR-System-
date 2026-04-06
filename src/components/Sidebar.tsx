@@ -98,7 +98,7 @@ export function Sidebar({ activeTab, setActiveTab, onAction, isAuthReady, onLogi
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-900/20 transition-all"
           >
             <LogOut className="w-5 h-5" />
-            <span className="font-medium">Logout</span>
+            <span className="font-medium">Sign Out</span>
           </button>
         ) : (
           <button 
@@ -106,7 +106,7 @@ export function Sidebar({ activeTab, setActiveTab, onAction, isAuthReady, onLogi
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all"
           >
             <LogOut className="w-5 h-5 rotate-180" />
-            <span className="font-medium">Login</span>
+            <span className="font-medium">Sign In</span>
           </button>
         )}
       </div>
