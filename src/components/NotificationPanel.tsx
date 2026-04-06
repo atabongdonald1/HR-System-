@@ -33,7 +33,7 @@ interface NotificationPanelProps {
   onClose: () => void;
 }
 
-export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
+export function NotificationPanel({ isOpen, onClose, isAuthReady }: NotificationPanelProps & { isAuthReady?: boolean }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     performanceAlerts: true,
@@ -44,7 +44,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!isAuthReady || !auth.currentUser) return;
 
     // Fetch Notifications
     const q = query(collection(db, 'notifications'), orderBy('timestamp', 'desc'));
@@ -67,7 +67,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [isAuthReady]);
 
   const markAsRead = async (id: string) => {
     try {

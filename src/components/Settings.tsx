@@ -21,7 +21,7 @@ import { cn } from '../lib/utils';
 import { db, auth } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
-export function Settings() {
+export function Settings({ isAuthReady }: { isAuthReady?: boolean }) {
   const [activeSection, setActiveSection] = useState('profile');
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState({ title: 'Settings Updated', description: 'Your preferences have been saved successfully.' });
@@ -53,7 +53,7 @@ export function Settings() {
 
   useEffect(() => {
     const fetchSettings = async () => {
-      if (auth.currentUser) {
+      if (isAuthReady && auth.currentUser) {
         const docRef = doc(db, 'userPreferences', auth.currentUser.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
@@ -62,7 +62,7 @@ export function Settings() {
       }
     };
     fetchSettings();
-  }, []);
+  }, [isAuthReady]);
 
   const handleSave = async () => {
     setIsSaving(true);

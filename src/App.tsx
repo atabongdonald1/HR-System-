@@ -171,15 +171,15 @@ export default function App() {
       case 'dashboard':
         return <Dashboard onGenerateInsights={() => setActiveTab('console')} isAuthReady={isAuthReady} />;
       case 'recruitment':
-        return <Recruitment />;
+        return <Recruitment isAuthReady={isAuthReady} />;
       case 'workforce':
-        return <Workforce />;
+        return <Workforce isAuthReady={isAuthReady} />;
       case 'performance':
-        return <Performance />;
+        return <Performance isAuthReady={isAuthReady} />;
       case 'compliance':
-        return <Compliance />;
+        return <Compliance isAuthReady={isAuthReady} />;
       case 'payroll':
-        return <Payroll />;
+        return <Payroll isAuthReady={isAuthReady} />;
       case 'search-results':
         return (
           <SearchResults 
@@ -195,9 +195,9 @@ export default function App() {
           />
         );
       case 'console':
-        return <AIConsole />;
+        return <AIConsole isAuthReady={isAuthReady} />;
       case 'settings':
-        return <Settings />;
+        return <Settings isAuthReady={isAuthReady} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-[60vh] text-slate-400">
@@ -489,6 +489,7 @@ export default function App() {
       <NotificationPanel 
         isOpen={isNotificationPanelOpen} 
         onClose={() => setIsNotificationPanelOpen(false)} 
+        isAuthReady={isAuthReady}
       />
 
       {/* Fix Login Access Modal */}

@@ -34,7 +34,7 @@ const SentimentIcon = ({ sentiment }: { sentiment: string }) => {
   }
 };
 
-export function Workforce() {
+export function Workforce({ isAuthReady }: { isAuthReady?: boolean }) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [showToast, setShowToast] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,6 +59,8 @@ export function Workforce() {
   });
 
   useEffect(() => {
+    if (!isAuthReady || !auth.currentUser) return;
+
     const q = query(collection(db, 'employees'), orderBy('name', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({
@@ -70,7 +72,7 @@ export function Workforce() {
       handleFirestoreError(error, OperationType.LIST, 'employees');
     });
     return () => unsubscribe();
-  }, []);
+  }, [isAuthReady]);
 
   const triggerToast = () => {
     setShowToast(true);

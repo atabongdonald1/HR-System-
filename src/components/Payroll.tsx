@@ -31,11 +31,13 @@ import { Employee } from '../types';
 
 const PAYROLL_STATS: any[] = [];
 
-export function Payroll() {
+export function Payroll({ isAuthReady }: { isAuthReady?: boolean }) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
+    if (!isAuthReady || !auth.currentUser) return;
+
     const unsubscribe = onSnapshot(collection(db, 'employees'), (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
       setEmployees(fetched);
@@ -43,7 +45,7 @@ export function Payroll() {
       handleFirestoreError(error, OperationType.LIST, 'employees');
     });
     return () => unsubscribe();
-  }, []);
+  }, [isAuthReady]);
 
   const triggerToast = () => {
     setShowToast(true);

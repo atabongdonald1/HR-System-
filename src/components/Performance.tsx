@@ -61,11 +61,13 @@ const StatCard = ({ title, value, change, trend, icon: Icon, color }: any) => (
   </motion.div>
 );
 
-export function Performance() {
+export function Performance({ isAuthReady }: { isAuthReady?: boolean }) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
+    if (!isAuthReady || !auth.currentUser) return;
+
     const unsubscribe = onSnapshot(collection(db, 'employees'), (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
       setEmployees(fetched);
@@ -73,7 +75,7 @@ export function Performance() {
       handleFirestoreError(error, OperationType.LIST, 'employees');
     });
     return () => unsubscribe();
-  }, []);
+  }, [isAuthReady]);
 
   useEffect(() => {
     if (employees.length === 0) return;

@@ -20,13 +20,15 @@ import { Employee } from '../types';
 import { geminiService } from '../services/geminiService';
 import Markdown from 'react-markdown';
 
-export function Compliance() {
+export function Compliance({ isAuthReady }: { isAuthReady?: boolean }) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [showToast, setShowToast] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedPolicy, setGeneratedPolicy] = useState<any>(null);
 
   useEffect(() => {
+    if (!isAuthReady || !auth.currentUser) return;
+
     const q = query(collection(db, 'employees'), orderBy('name', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({
@@ -36,7 +38,7 @@ export function Compliance() {
       setEmployees(fetched);
     });
     return () => unsubscribe();
-  }, []);
+  }, [isAuthReady]);
 
   const triggerToast = () => {
     setShowToast(true);

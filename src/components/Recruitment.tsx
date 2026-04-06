@@ -46,7 +46,7 @@ import {
 } from 'firebase/firestore';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from 'firebase/auth';
 
-export function Recruitment() {
+export function Recruitment({ isAuthReady }: { isAuthReady?: boolean }) {
   const [activeView, setActiveView] = useState<'jobs' | 'candidates'>('candidates');
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [jobs, setJobs] = useState<JobPost[]>([]);

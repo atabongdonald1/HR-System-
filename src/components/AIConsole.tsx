@@ -13,7 +13,7 @@ import {
 import { geminiService } from '../services/geminiService';
 import { cn } from '../lib/utils';
 import Markdown from 'react-markdown';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { Candidate, Employee, JobPost } from '../types';
 
@@ -24,7 +24,7 @@ interface Message {
   isToolCall?: boolean;
 }
 
-export function AIConsole() {
+export function AIConsole({ isAuthReady }: { isAuthReady?: boolean }) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
@@ -41,22 +41,28 @@ export function AIConsole() {
   const [jobs, setJobs] = useState<JobPost[]>([]);
 
   useEffect(() => {
+    // Candidates and Jobs are public
     const unsubCandidates = onSnapshot(collection(db, 'candidates'), (snapshot) => {
       setCandidates(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Candidate));
-    });
-    const unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
-      setEmployees(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee));
     });
     const unsubJobs = onSnapshot(collection(db, 'jobs'), (snapshot) => {
       setJobs(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as JobPost));
     });
+
+    // Employees is restricted
+    let unsubEmployees = () => {};
+    if (isAuthReady && auth.currentUser) {
+      unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
+        setEmployees(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee));
+      });
+    }
 
     return () => {
       unsubCandidates();
       unsubEmployees();
       unsubJobs();
     };
-  }, []);
+  }, [isAuthReady]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
