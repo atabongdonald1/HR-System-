@@ -59,7 +59,7 @@ service cloud.firestore {
              data.id is string && data.id.size() > 0 && data.id.size() <= 50 &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
              isValidEmail(data.email) &&
-             data.role is string && data.role.size() > 0 &&
+             data.role is string && data.role.size() > 0 && data.role.size() <= 100 &&
              data.status in ['New', 'Screening', 'Interviewing', 'Offered', 'Hired', 'Rejected'];
     }
 
@@ -72,8 +72,11 @@ service cloud.firestore {
 
     function isValidJob(data) {
       return hasRequiredFields(['id', 'title', 'department', 'location', 'status']) &&
-             data.id is string && data.title is string && data.department is string &&
-             data.location is string && data.status in ['Open', 'Closed', 'Draft'];
+             data.id is string && data.id.size() > 0 && data.id.size() <= 50 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.department is string && data.department.size() > 0 && data.department.size() <= 100 &&
+             data.location is string && data.location.size() > 0 && data.location.size() <= 100 &&
+             data.status in ['Open', 'Closed', 'Draft'];
     }
 
     function isValidNotification(data) {
@@ -90,7 +93,9 @@ service cloud.firestore {
 
     match /candidates/{candidateId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow create: if isValidCandidate(request.resource.data);
+      allow update: if isAuthenticated() && isValidCandidate(request.resource.data);
+      allow delete: if isAuthenticated() && isAdmin();
     }
 
     match /employees/{employeeId} {
@@ -99,7 +104,9 @@ service cloud.firestore {
 
     match /jobs/{jobId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow create: if isValidJob(request.resource.data);
+      allow update: if isAuthenticated() && isValidJob(request.resource.data);
+      allow delete: if isAuthenticated() && isAdmin();
     }
 
     match /notifications/{notificationId} {

@@ -151,8 +151,10 @@ export function Recruitment() {
         updatedAt: Timestamp.now()
       };
       await setDoc(doc(db, 'candidates', candidate.id), candidateData);
+      return true;
     } catch (error) {
       handleFirestoreErrorLocal(error, OperationType.WRITE, `candidates/${candidate.id}`);
+      return false;
     }
   };
 
@@ -164,8 +166,10 @@ export function Recruitment() {
         updatedAt: Timestamp.now()
       };
       await setDoc(doc(db, 'jobs', job.id), jobData);
+      return true;
     } catch (error) {
       handleFirestoreErrorLocal(error, OperationType.WRITE, `jobs/${job.id}`);
+      return false;
     }
   };
 
@@ -1428,7 +1432,7 @@ export function Recruitment() {
               
               <form 
                 className="p-6 space-y-4"
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
                   const formData = new FormData(e.currentTarget);
                   
@@ -1473,15 +1477,16 @@ export function Recruitment() {
                       }
                     };
                     
-                    saveCandidate(newCandidate);
-                    
-                    setIsAddModalOpen(false);
-                    setToastMessage({
-                      title: 'Candidate Added',
-                      description: `${newCandidate.name} has been added to the pool.`
-                    });
-                    setShowToast(true);
-                    setTimeout(() => setShowToast(false), 3000);
+                    const success = await saveCandidate(newCandidate);
+                    if (success) {
+                      setIsAddModalOpen(false);
+                      setToastMessage({
+                        title: 'Candidate Added',
+                        description: `${newCandidate.name} has been added to the pool.`
+                      });
+                      setShowToast(true);
+                      setTimeout(() => setShowToast(false), 3000);
+                    }
                   } else {
                     const salaryRangeStr = formData.get('phone') as string;
                     const [minStr, maxStr] = salaryRangeStr.split('-').map(s => s.trim().replace(/[^0-9]/g, ''));
@@ -1502,17 +1507,17 @@ export function Recruitment() {
                       status: 'Open'
                     };
                     
-                    saveJob(newJob);
-                    
-                    setToastMessage({
-                      title: 'Job Post Created',
-                      description: `The position "${newJob.title}" has been published.`
-                    });
+                    const success = await saveJob(newJob);
+                    if (success) {
+                      setIsAddModalOpen(false);
+                      setToastMessage({
+                        title: 'Job Post Created',
+                        description: `The position "${newJob.title}" has been published.`
+                      });
+                      setShowToast(true);
+                      setTimeout(() => setShowToast(false), 3000);
+                    }
                   }
-                  
-                  setIsAddModalOpen(false);
-                  setShowToast(true);
-                  setTimeout(() => setShowToast(false), 3000);
                 }}
               >
                 <div className="grid grid-cols-2 gap-4">

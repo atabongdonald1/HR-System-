@@ -169,7 +169,7 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard onGenerateInsights={() => setActiveTab('console')} />;
+        return <Dashboard onGenerateInsights={() => setActiveTab('console')} isAuthReady={isAuthReady} />;
       case 'recruitment':
         return <Recruitment />;
       case 'workforce':

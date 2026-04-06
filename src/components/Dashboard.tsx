@@ -54,9 +54,10 @@ const StatCard = ({ id, title, value, change, trend, icon: Icon, color }: any) =
 
 interface DashboardProps {
   onGenerateInsights?: () => void;
+  isAuthReady: boolean;
 }
 
-export function Dashboard({ onGenerateInsights }: DashboardProps) {
+export function Dashboard({ onGenerateInsights, isAuthReady }: DashboardProps) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [showToast, setShowToast] = useState(false);
@@ -87,7 +88,7 @@ export function Dashboard({ onGenerateInsights }: DashboardProps) {
       unsubEmployees();
       unsubCandidates();
     };
-  }, []);
+  }, [isAuthReady]);
 
   const triggerToast = () => {
     setShowToast(true);
