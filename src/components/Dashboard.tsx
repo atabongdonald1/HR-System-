@@ -247,7 +247,7 @@ export function Dashboard({ onGenerateInsights }: DashboardProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div id="growth-chart-container" className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
           <h3 className="text-lg font-bold text-slate-900 mb-6">Growth & Hiring Velocity</h3>
-          <div className="h-[300px]">
+          <div className="h-[300px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs>

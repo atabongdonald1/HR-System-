@@ -20,8 +20,9 @@ import {
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, onSnapshot, query, orderBy, addDoc, setDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, setDoc, doc, deleteDoc } from 'firebase/firestore';
 import { Employee } from '../types';
+import { Trash2 } from 'lucide-react';
 
 const SentimentIcon = ({ sentiment }: { sentiment: string }) => {
   switch (sentiment) {
@@ -38,6 +39,7 @@ export function Workforce() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [toastMessage, setToastMessage] = useState({ title: 'Workforce Intelligence', description: 'NEXA-HR is analyzing workforce data.' });
 
   // New Employee State
   const [newEmployee, setNewEmployee] = useState<Partial<Employee>>({
@@ -113,6 +115,18 @@ export function Workforce() {
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'employees');
+    }
+  };
+
+  const handleDeleteEmployee = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this employee profile?')) return;
+    try {
+      await deleteDoc(doc(db, 'employees', id));
+      setToastMessage({ title: 'Employee Deleted', description: 'The employee profile has been removed.' });
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `employees/${id}`);
     }
   };
 
@@ -270,8 +284,11 @@ export function Workforce() {
                           <span className="text-sm font-bold text-slate-700">{employee.sentiment}</span>
                         </div>
                       </div>
-                      <button className="p-2 text-slate-400 hover:text-slate-600 rounded-lg">
-                        <MoreVertical className="w-5 h-5" />
+                      <button 
+                        onClick={() => handleDeleteEmployee(employee.id)}
+                        className="p-2 text-slate-400 hover:text-rose-600 rounded-lg transition-all"
+                      >
+                        <Trash2 className="w-5 h-5" />
                       </button>
                     </div>
                     <div className="text-right">
@@ -465,8 +482,8 @@ export function Workforce() {
               <Users className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="font-bold text-sm">Workforce Intelligence</p>
-              <p className="text-slate-400 text-xs">NEXA-HR is analyzing workforce data.</p>
+              <p className="font-bold text-sm">{toastMessage.title}</p>
+              <p className="text-slate-400 text-xs">{toastMessage.description}</p>
             </div>
           </motion.div>
         )}

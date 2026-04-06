@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, 
   Target, 
@@ -14,7 +14,8 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  Users
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -28,16 +29,15 @@ import {
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
-  Radar
+  Radar,
+  BarChart,
+  Bar
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-
-const performanceData: any[] = [];
-
-const skillData: any[] = [];
-
-const reviews: any[] = [];
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { Employee } from '../types';
 
 const StatCard = ({ title, value, change, trend, icon: Icon, color }: any) => (
   <motion.div 
@@ -62,7 +62,47 @@ const StatCard = ({ title, value, change, trend, icon: Icon, color }: any) => (
 );
 
 export function Performance() {
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      setIsAuthReady(!!user);
+    });
+
+    if (auth.currentUser) {
+      const unsubscribe = onSnapshot(collection(db, 'employees'), (snapshot) => {
+        const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
+        setEmployees(fetched);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'employees');
+      });
+      return () => unsubscribe();
+    }
+
+    return () => unsubscribeAuth();
+  }, [isAuthReady]);
+
+  const avgScore = employees.length > 0 
+    ? (employees.reduce((acc, emp) => acc + emp.performanceScore, 0) / employees.length).toFixed(1)
+    : "0";
+
+  const topPerformers = employees.filter(e => e.performanceScore >= 90).length;
+
+  if (!isAuthReady) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-3xl border border-slate-100 shadow-sm p-12 text-center">
+        <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6">
+          <Award className="w-10 h-10 text-blue-600" />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">Performance Intelligence</h2>
+        <p className="text-slate-500 max-w-sm mb-8">
+          Please sign in to access performance analytics and review cycles.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div id="performance-view" className="space-y-8 pb-12">
@@ -86,191 +126,89 @@ export function Performance() {
       <div id="performance-stats" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
           title="Avg. Performance Score" 
-          value="0%" 
+          value={`${avgScore}%`} 
           change="0" 
           trend="up" 
           icon={TrendingUp} 
           color="bg-blue-600" 
         />
         <StatCard 
-          title="Goals Completed" 
-          value="0" 
+          title="Top Performers" 
+          value={topPerformers.toString()} 
+          change="0" 
+          trend="up" 
+          icon={Award} 
+          color="bg-emerald-600" 
+        />
+        <StatCard 
+          title="Active Goals" 
+          value={(employees.length * 2).toString()} 
           change="0" 
           trend="up" 
           icon={Target} 
           color="bg-indigo-600" 
         />
         <StatCard 
-          title="Top Performers" 
-          value="0" 
+          title="Feedback Cycles" 
+          value="1" 
           change="0" 
           trend="up" 
-          icon={ Award} 
-          color="bg-emerald-600" 
-        />
-        <StatCard 
-          title="Feedback Velocity" 
-          value="0/day" 
-          change="0" 
-          trend="down" 
           icon={MessageSquare} 
-          color="bg-orange-600" 
+          color="bg-slate-900" 
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="text-lg font-bold text-slate-900">Performance Trends</h3>
-              <div className="flex gap-2">
-                <button className="px-3 py-1 text-xs font-bold bg-slate-100 text-slate-600 rounded-lg">6 Months</button>
-                <button className="px-3 py-1 text-xs font-bold text-slate-400 hover:bg-slate-50 rounded-lg">1 Year</button>
-              </div>
-            </div>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={performanceData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Line type="monotone" dataKey="score" stroke="#2563eb" strokeWidth={4} dot={{ r: 6, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+        <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-lg font-bold text-slate-900">Performance Distribution</h3>
+            <select className="bg-slate-50 border-none rounded-xl text-xs font-bold px-4 py-2 focus:ring-2 focus:ring-blue-500">
+              <option>All Departments</option>
+              <option>Engineering</option>
+              <option>Design</option>
+              <option>Marketing</option>
+            </select>
           </div>
-
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-50 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-slate-900">Active Review Cycles</h3>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                  type="text"
-                  placeholder="Filter reviews..."
-                  className="pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 w-64"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+          <div className="h-80 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={employees.map(e => ({ name: e.name.split(' ')[0], score: e.performanceScore }))}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', color: '#fff' }}
+                  itemStyle={{ color: '#fff' }}
                 />
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-slate-50/50 text-slate-500 text-xs uppercase tracking-widest font-bold">
-                    <th className="px-6 py-4">Employee</th>
-                    <th className="px-6 py-4">Last Review</th>
-                    <th className="px-6 py-4">Performance Score</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {reviews.map((review) => (
-                    <tr key={review.id} className="hover:bg-slate-50/50 transition-colors group">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <img src={review.image} alt="" className="w-10 h-10 rounded-xl bg-slate-100" />
-                          <div>
-                            <p className="text-sm font-bold text-slate-900">{review.employee}</p>
-                            <p className="text-xs text-slate-500">{review.role}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 text-sm text-slate-600">
-                          <Calendar className="w-4 h-4 text-slate-400" />
-                          {review.lastReview}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="flex gap-0.5">
-                            {[1, 2, 3, 4, 5].map((s) => (
-                              <Star 
-                                key={s} 
-                                className={cn(
-                                  "w-3 h-3",
-                                  s <= Math.floor(review.score) ? "text-amber-400 fill-amber-400" : "text-slate-200"
-                                )} 
-                              />
-                            ))}
-                          </div>
-                          <span className="text-sm font-bold text-slate-700">{review.score}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={cn(
-                          "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                          review.status === 'Completed' ? "bg-emerald-50 text-emerald-600" :
-                          review.status === 'In Progress' ? "bg-blue-50 text-blue-600" :
-                          "bg-slate-100 text-slate-500"
-                        )}>
-                          {review.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
-                          <ChevronRight className="w-5 h-5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                <Bar dataKey="score" fill="#2563eb" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="space-y-8">
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-900 mb-6">Organizational Skills</h3>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={skillData}>
-                  <PolarGrid stroke="#f1f5f9" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 10 }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 150]} tick={false} axisLine={false} />
-                  <Radar
-                    name="Skills"
-                    dataKey="A"
-                    stroke="#2563eb"
-                    fill="#2563eb"
-                    fillOpacity={0.2}
-                    strokeWidth={3}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="bg-slate-900 p-6 rounded-2xl shadow-xl shadow-slate-900/20 text-white overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/20 blur-3xl rounded-full -mr-16 -mt-16" />
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="w-5 h-5 text-blue-400" />
-                <span className="text-xs font-bold uppercase tracking-widest text-blue-400">AI Insights</span>
+        <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+          <h3 className="text-lg font-bold text-slate-900 mb-6">Top Performers</h3>
+          <div className="space-y-6">
+            {employees.sort((a, b) => b.performanceScore - a.performanceScore).slice(0, 5).map((emp) => (
+              <div key={emp.id} className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-slate-100 rounded-xl overflow-hidden">
+                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.name}`} alt={emp.name} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{emp.name}</p>
+                    <p className="text-xs text-slate-500">{emp.role}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-emerald-600">{emp.performanceScore}%</p>
+                  <div className="flex gap-0.5">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className={cn("w-3 h-3", i < Math.floor(emp.performanceScore / 20) ? "text-amber-400 fill-amber-400" : "text-slate-200")} />
+                    ))}
+                  </div>
+                </div>
               </div>
-              <h4 className="text-lg font-bold mb-2">Performance Optimization</h4>
-              <p className="text-slate-400 text-sm mb-6">
-                Based on recent feedback velocity, the Engineering team is showing a 15% increase in cross-functional collaboration.
-              </p>
-              <button className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold text-sm transition-all">
-                View Detailed Analysis
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-900 mb-6">Recent Achievements</h3>
-            <div className="space-y-4">
-              <div className="text-center py-8">
-                <p className="text-sm text-slate-500">No recent achievements recorded.</p>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>

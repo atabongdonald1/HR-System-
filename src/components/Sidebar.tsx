@@ -12,6 +12,8 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { auth } from '../lib/firebase';
+import { signOut } from 'firebase/auth';
 
 interface SidebarProps {
   activeTab: string;
@@ -30,6 +32,15 @@ const navItems = [
 ];
 
 export function Sidebar({ activeTab, setActiveTab, onAction }: SidebarProps) {
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      onAction?.('Logged out successfully.');
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
+
   return (
     <div className="w-64 h-screen bg-slate-900 text-white flex flex-col border-r border-slate-800">
       <div className="p-6 flex items-center gap-3">
@@ -80,7 +91,7 @@ export function Sidebar({ activeTab, setActiveTab, onAction }: SidebarProps) {
           <span className="font-medium">Settings</span>
         </button>
         <button 
-          onClick={() => onAction?.('Logging out of NEXA-HR...')}
+          onClick={handleLogout}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-900/20 transition-all"
         >
           <LogOut className="w-5 h-5" />

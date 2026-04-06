@@ -12,7 +12,9 @@ import {
   Eye,
   EyeOff,
   Save,
-  CheckCircle2
+  CheckCircle2,
+  Trash2,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -22,8 +24,11 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 export function Settings() {
   const [activeSection, setActiveSection] = useState('profile');
   const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState({ title: 'Settings Updated', description: 'Your preferences have been saved successfully.' });
   const [isSaving, setIsSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const [settings, setSettings] = useState({
     profile: {
@@ -71,6 +76,37 @@ export function Settings() {
       console.error("Error saving settings:", error);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSystemReset = async () => {
+    setIsResetting(true);
+    try {
+      const collectionsToClear = ['candidates', 'jobs', 'employees', 'notifications'];
+      const { getDocs, collection, deleteDoc, doc } = await import('firebase/firestore');
+      
+      for (const collName of collectionsToClear) {
+        const snapshot = await getDocs(collection(db, collName));
+        const deletePromises = snapshot.docs.map(d => deleteDoc(doc(db, collName, d.id)));
+        await Promise.all(deletePromises);
+      }
+
+      setToastMessage({
+        title: 'System Reset Complete',
+        description: 'All organizational data has been cleared from NEXA-HR.'
+      });
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+      setIsResetConfirmOpen(false);
+    } catch (error) {
+      console.error("Error resetting system:", error);
+      setToastMessage({
+        title: 'Reset Failed',
+        description: 'An error occurred while clearing the database.'
+      });
+      setShowToast(true);
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -334,7 +370,10 @@ export function Settings() {
                             <p className="text-xs text-rose-700">Irreversible system actions.</p>
                           </div>
                         </div>
-                        <button className="px-4 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700 transition-all">
+                        <button 
+                          onClick={() => setIsResetConfirmOpen(true)}
+                          className="px-4 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700 transition-all"
+                        >
                           Reset System
                         </button>
                       </div>
@@ -347,6 +386,48 @@ export function Settings() {
         </div>
       </div>
 
+      {/* Reset Confirmation Modal */}
+      <AnimatePresence>
+        {isResetConfirmOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100"
+            >
+              <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6">
+                <Shield className="w-8 h-8 text-rose-600" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Confirm System Reset</h3>
+              <p className="text-slate-500 mb-8 leading-relaxed">
+                This action is <span className="font-bold text-rose-600">irreversible</span>. All candidates, jobs, employees, and notifications will be permanently deleted from the NEXA-HR database.
+              </p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setIsResetConfirmOpen(false)}
+                  className="flex-1 px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleSystemReset}
+                  disabled={isResetting}
+                  className="flex-1 px-6 py-3 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition-all shadow-lg shadow-rose-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isResetting ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  Reset All Data
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Toast Notification */}
       <AnimatePresence>
         {showToast && (
@@ -354,14 +435,17 @@ export function Settings() {
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-8 right-8 z-[100] bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-800"
+            className="fixed bottom-8 right-8 z-[110] bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-800"
           >
-            <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center">
-              <CheckCircle2 className="w-5 h-5 text-white" />
+            <div className={cn(
+              "w-8 h-8 rounded-full flex items-center justify-center",
+              toastMessage.title.includes('Failed') ? "bg-rose-500" : "bg-emerald-500"
+            )}>
+              {toastMessage.title.includes('Failed') ? <AlertCircle className="w-5 h-5 text-white" /> : <CheckCircle2 className="w-5 h-5 text-white" />}
             </div>
             <div>
-              <p className="font-bold text-sm">Settings Updated</p>
-              <p className="text-slate-400 text-xs">Your preferences have been saved successfully.</p>
+              <p className="font-bold text-sm">{toastMessage.title}</p>
+              <p className="text-slate-400 text-xs">{toastMessage.description}</p>
             </div>
           </motion.div>
         )}

@@ -275,8 +275,8 @@ export function Recruitment() {
       const newCandidate: Candidate = {
         id: Math.random().toString(36).substr(2, 9),
         name: analysis.name || file.name.split('.')[0],
-        email: `${analysis.name?.toLowerCase().replace(/\s/g, '.')}@example.com`,
-        phone: '+971 50 000 0000',
+        email: analysis.email || `${analysis.name?.toLowerCase().replace(/\s/g, '.')}@example.com`,
+        phone: analysis.phone || '+971 50 000 0000',
         role: analysis.role || 'New Candidate',
         experience: analysis.experienceYears || 0,
         skills: analysis.skills || [],
@@ -317,6 +317,16 @@ export function Recruitment() {
   };
 
   const handleAutoSource = async (location?: string, skills?: string[]) => {
+    if (jobs.length === 0) {
+      setToastMessage({
+        title: 'No Job Posts Found',
+        description: 'Please create at least one job posting before activating NEXA-SOURCE.'
+      });
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
+      return;
+    }
+
     setIsSourcing(true);
     setIsSourcingModalOpen(false);
     try {
@@ -325,6 +335,16 @@ export function Recruitment() {
         skills: skills?.filter(s => s.trim() !== '') 
       });
       
+      if (sourcedCandidates.length === 0) {
+        setToastMessage({
+          title: 'No Candidates Found',
+          description: 'NEXA-SOURCE could not find matching candidates on the web. Try broadening your search criteria.'
+        });
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 4000);
+        return;
+      }
+
       const newCandidates: Candidate[] = sourcedCandidates.map((c: any) => ({
         id: Math.random().toString(36).substr(2, 9),
         name: c.name,
@@ -370,10 +390,30 @@ export function Recruitment() {
   };
 
   const handleAutoCollect = async () => {
+    if (jobs.length === 0) {
+      setToastMessage({
+        title: 'No Job Posts Found',
+        description: 'Please create at least one job posting before activating NEXA-COLLECT.'
+      });
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
+      return;
+    }
+
     setIsCollecting(true);
     try {
       const collectedCandidates = await geminiService.collectCVs(jobs);
       
+      if (collectedCandidates.length === 0) {
+        setToastMessage({
+          title: 'No CVs Found',
+          description: 'NEXA-COLLECT could not find matching profiles on the web. Try adding more details to your job posts.'
+        });
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 4000);
+        return;
+      }
+
       const newCandidates: Candidate[] = collectedCandidates.map((c: any) => ({
         id: Math.random().toString(36).substr(2, 9),
         name: c.name,
@@ -625,7 +665,9 @@ export function Recruitment() {
           </div>
           <div>
             <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Avg. Time to Hire</p>
-            <p className="text-xl font-bold text-slate-900">18 Days</p>
+            <p className="text-xl font-bold text-slate-900">
+              {candidates.length > 0 ? '18 Days' : '0 Days'}
+            </p>
           </div>
         </div>
       </div>
@@ -758,10 +800,18 @@ export function Recruitment() {
                           {candidate.status}
                         </span>
                         {candidate.source && (
-                          <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                          <a 
+                            href={candidate.source.startsWith('http') ? candidate.source : '#'} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className={cn(
+                              "flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all",
+                              candidate.source.startsWith('http') ? "hover:bg-indigo-100 cursor-pointer" : "cursor-default"
+                            )}
+                          >
                             <Globe className="w-2.5 h-2.5" />
-                            Source: {candidate.source}
-                          </span>
+                            Source: {candidate.source.startsWith('http') ? 'View Profile' : candidate.source}
+                          </a>
                         )}
                       </div>
                       <p className="text-slate-500 text-sm flex items-center gap-1 mt-1">
@@ -1001,91 +1051,132 @@ export function Recruitment() {
         )}
       </AnimatePresence>
 
-      {/* Candidate Modal */}
+      {/* Candidate Full Profile View */}
       <AnimatePresence>
         {selectedCandidate && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden"
-            >
-              <div className="relative h-32 bg-slate-900">
-                <button 
-                  onClick={() => setSelectedCandidate(null)}
-                  className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all"
-                >
+          <motion.div 
+            initial={{ opacity: 0, x: '100%' }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"
+          >
+            {/* Header / Navigation */}
+            <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center shadow-sm">
+              <button 
+                onClick={() => setSelectedCandidate(null)}
+                className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-bold transition-all group"
+              >
+                <div className="p-2 bg-slate-100 rounded-xl group-hover:bg-slate-200 transition-colors">
                   <X className="w-5 h-5" />
+                </div>
+                Return to Recruitment
+              </button>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-sm font-bold">
+                  <Sparkles className="w-4 h-4" />
+                  NEXA-RANK: {selectedCandidate.hireScore}/100
+                </div>
+                <button 
+                  onClick={() => deleteCandidate(selectedCandidate.id)}
+                  className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                  title="Delete Profile"
+                >
+                  <Trash2 className="w-5 h-5" />
                 </button>
               </div>
-              <div className="px-8 pb-8 -mt-12">
-                <div className="flex items-end gap-6 mb-6">
-                  <div className="w-24 h-24 bg-slate-100 rounded-3xl border-4 border-white shadow-lg flex items-center justify-center text-3xl font-bold text-slate-400">
-                    {selectedCandidate.name.charAt(0)}
+            </div>
+
+            <div className="max-w-6xl mx-auto p-8">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Left Column: Basic Info & Contact */}
+                <div className="lg:col-span-1 space-y-8">
+                  <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm text-center">
+                    <div className="w-32 h-32 bg-slate-100 rounded-3xl mx-auto mb-6 flex items-center justify-center text-4xl font-bold text-slate-400 shadow-inner">
+                      {selectedCandidate.name.charAt(0)}
+                    </div>
+                    <h3 className="text-2xl font-bold text-slate-900 mb-1">{selectedCandidate.name}</h3>
+                    <p className="text-blue-600 font-bold mb-6">{selectedCandidate.role}</p>
+                    
+                    <div className="flex flex-col gap-3">
+                      <button 
+                        onClick={() => handleSchedule(selectedCandidate.id)}
+                        disabled={schedulingId !== null}
+                        className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {schedulingId === selectedCandidate.id ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Calendar className="w-5 h-5" />
+                        )}
+                        {schedulingId === selectedCandidate.id ? 'Scheduling...' : 'Schedule Interview'}
+                      </button>
+                      <button className="w-full py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
+                        <Mail className="w-5 h-5" />
+                        Send Message
+                      </button>
+                    </div>
                   </div>
-                  <div className="pb-2">
-                    <h3 className="text-2xl font-bold text-slate-900">{selectedCandidate.name}</h3>
-                    <p className="text-blue-600 font-medium">{selectedCandidate.role}</p>
+
+                  <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Contact & Source</h4>
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl">
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                          <Mail className="w-5 h-5 text-blue-500" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Email</p>
+                          <p className="text-sm font-bold text-slate-700">{selectedCandidate.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl">
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                          <Phone className="w-5 h-5 text-emerald-500" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Phone</p>
+                          <p className="text-sm font-bold text-slate-700">{selectedCandidate.phone}</p>
+                        </div>
+                      </div>
+                      {selectedCandidate.source && (
+                        <div className="flex items-center gap-4 p-4 bg-indigo-50/50 rounded-2xl">
+                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                            <Globe className="w-5 h-5 text-indigo-500" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase">Source</p>
+                            <a 
+                              href={selectedCandidate.source.startsWith('http') ? selectedCandidate.source : '#'} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className={cn(
+                                "text-sm font-bold text-indigo-600 transition-all",
+                                selectedCandidate.source.startsWith('http') ? "hover:underline cursor-pointer" : "cursor-default"
+                              )}
+                            >
+                              {selectedCandidate.source.startsWith('http') ? 'View Original Profile' : selectedCandidate.source}
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-8">
-                  <div className="space-y-6">
-                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                      <h4 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-4">Contact Information</h4>
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3 text-sm text-slate-600">
-                          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                            <Mail className="w-4 h-4 text-blue-500" />
-                          </div>
-                          {selectedCandidate.email}
+                {/* Right Column: Analysis, Skills, Experience */}
+                <div className="lg:col-span-2 space-y-8">
+                  {/* AI Analysis Card */}
+                  <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+                    <div className="flex justify-between items-center mb-8">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-50 rounded-xl">
+                          <BrainCircuit className="w-6 h-6 text-blue-600" />
                         </div>
-                        <div className="flex items-center gap-3 text-sm text-slate-600">
-                          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                            <Phone className="w-4 h-4 text-blue-500" />
-                          </div>
-                          {selectedCandidate.phone}
-                        </div>
-                        {selectedCandidate.source && (
-                          <div className="flex items-center gap-3 text-sm text-slate-600">
-                            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                              <Globe className="w-4 h-4 text-blue-500" />
-                            </div>
-                            <span className="font-medium text-indigo-600 uppercase tracking-wider text-[10px]">
-                              Source: {selectedCandidate.source}
-                            </span>
-                          </div>
-                        )}
+                        <h4 className="text-lg font-bold text-slate-900">NEXA Intelligence Analysis</h4>
                       </div>
-                    </div>
-
-                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                      <h4 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-4">Education</h4>
-                      <div className="flex items-start gap-3 text-sm text-slate-600">
-                        <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm shrink-0">
-                          <GraduationCap className="w-4 h-4 text-blue-500" />
-                        </div>
-                        <span className="pt-1.5">{selectedCandidate.education}</span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-3">Skills</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedCandidate.skills.map(skill => (
-                          <span key={skill} className="px-2 py-1 bg-slate-50 text-slate-600 rounded-lg text-xs font-medium border border-slate-100">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Candidate Status</h4>
+                      <div className="flex items-center gap-4">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Status</p>
                         <select 
                           value={selectedCandidate.status}
                           onChange={(e) => {
@@ -1093,68 +1184,98 @@ export function Recruitment() {
                             updateCandidateStatus(selectedCandidate.id, newStatus);
                             setSelectedCandidate({ ...selectedCandidate, status: newStatus });
                           }}
-                          className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                          className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
                         >
                           {uniqueStatuses.filter(s => s !== 'All').map(status => (
                             <option key={status} value={status}>{status}</option>
                           ))}
                         </select>
                       </div>
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">NEXA Score</h4>
-                        <div className="flex items-center gap-1 text-blue-600">
-                          <Star className="w-4 h-4 fill-current" />
-                          <span className="text-lg font-bold">{selectedCandidate.hireScore}</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                      <div className="space-y-4">
+                        <div className="p-6 bg-blue-50/50 rounded-2xl border border-blue-100">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Skills Match</span>
+                            <span className="text-lg font-bold text-blue-700">{selectedCandidate.analysis?.skillsMatch}%</span>
+                          </div>
+                          <div className="h-2 bg-blue-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-600 rounded-full" style={{ width: `${selectedCandidate.analysis?.skillsMatch}%` }} />
+                          </div>
+                        </div>
+                        <div className="p-6 bg-emerald-50/50 rounded-2xl border border-emerald-100">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Cultural Fit</span>
+                            <span className="text-lg font-bold text-emerald-700">{selectedCandidate.analysis?.culturalFit}%</span>
+                          </div>
+                          <div className="h-2 bg-emerald-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${selectedCandidate.analysis?.culturalFit}%` }} />
+                          </div>
                         </div>
                       </div>
-                      <div className="space-y-3">
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[10px] font-bold text-slate-500">
-                            <span>SKILLS MATCH</span>
-                            <span>{selectedCandidate.analysis?.skillsMatch}%</span>
+                      <div className="space-y-4">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Behavioral Indicators</p>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedCandidate.analysis?.behavioralIndicators.map(indicator => (
+                            <div key={indicator} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                              {indicator}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                      <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Executive Summary</h5>
+                      <p className="text-slate-600 leading-relaxed italic">
+                        "{selectedCandidate.analysis?.summary}"
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Experience & Skills */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Experience & Education</h4>
+                      <div className="space-y-6">
+                        <div className="flex gap-4">
+                          <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center shrink-0">
+                            <Briefcase className="w-5 h-5 text-slate-400" />
                           </div>
-                          <div className="h-1 bg-slate-200 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-600" style={{ width: `${selectedCandidate.analysis?.skillsMatch}%` }} />
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{selectedCandidate.experience} Years Professional Experience</p>
+                            <p className="text-xs text-slate-500 mt-1">Relevant to {selectedCandidate.role}</p>
                           </div>
                         </div>
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[10px] font-bold text-slate-500">
-                            <span>CULTURAL FIT</span>
-                            <span>{selectedCandidate.analysis?.culturalFit}%</span>
+                        <div className="flex gap-4">
+                          <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center shrink-0">
+                            <GraduationCap className="w-5 h-5 text-slate-400" />
                           </div>
-                          <div className="h-1 bg-slate-200 rounded-full overflow-hidden">
-                            <div className="h-full bg-emerald-600" style={{ width: `${selectedCandidate.analysis?.culturalFit}%` }} />
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">Education Background</p>
+                            <p className="text-xs text-slate-500 mt-1">{selectedCandidate.education}</p>
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="pt-4 space-y-3">
-                      <button 
-                        id="btn-modal-schedule"
-                        onClick={() => {
-                          handleSchedule(selectedCandidate.id);
-                          setSelectedCandidate(null);
-                        }}
-                        disabled={schedulingId !== null}
-                        className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
-                      >
-                        {schedulingId === selectedCandidate.id ? 'Scheduling...' : 'Schedule Interview'}
-                      </button>
-                      <button 
-                        onClick={() => {
-                          deleteCandidate(selectedCandidate.id);
-                          setSelectedCandidate(null);
-                        }}
-                        className="w-full py-3 bg-white border border-rose-200 text-rose-600 rounded-xl font-bold hover:bg-rose-50 transition-all"
-                      >
-                        Delete Candidate Profile
-                      </button>
+
+                    <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Technical Skills</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedCandidate.skills.map(skill => (
+                          <span key={skill} className="px-4 py-2 bg-blue-50 text-blue-700 rounded-xl text-sm font-bold border border-blue-100">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </motion.div>
-          </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
