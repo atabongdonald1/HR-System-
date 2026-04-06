@@ -63,21 +63,25 @@ export function Dashboard({ onGenerateInsights }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    // Employees
-    const unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
-      setEmployees(fetched);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'employees');
-    });
-
-    // Candidates
+    // Candidates (Publicly accessible)
     const unsubCandidates = onSnapshot(collection(db, 'candidates'), (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Candidate);
       setCandidates(fetched);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'candidates');
+      console.warn("Public access to candidates limited:", error.message);
     });
+
+    let unsubEmployees: () => void = () => {};
+
+    // Employees (Restricted)
+    if (auth.currentUser) {
+      unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
+        const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
+        setEmployees(fetched);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'employees');
+      });
+    }
 
     return () => {
       unsubEmployees();

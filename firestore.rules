@@ -89,19 +89,25 @@ service cloud.firestore {
     // ===============================================================
 
     match /candidates/{candidateId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAuthenticated();
     }
 
     match /employees/{employeeId} {
-      allow read, write: if true;
+      allow read, write: if isAuthenticated() && isAdmin();
     }
 
     match /jobs/{jobId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAuthenticated();
     }
 
     match /notifications/{notificationId} {
-      allow read, write: if true;
+      allow read, write: if isAuthenticated() && isAdmin();
+    }
+
+    match /test/connection {
+      allow read: if true;
     }
 
     match /userPreferences/{userId} {

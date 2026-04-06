@@ -69,29 +69,41 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Fetch Employees for proactive alerts and search
-    const unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
-      setEmployees(fetched);
-    });
-
-    // Fetch Candidates for search
+    // Candidates subscription (Publicly accessible)
     const unsubCandidates = onSnapshot(collection(db, 'candidates'), (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       setCandidates(fetched);
+    }, (error) => {
+      console.warn("Public access to candidates limited:", error.message);
     });
 
-    // Fetch Jobs for search
+    // Jobs subscription (Publicly accessible)
     const unsubJobs = onSnapshot(collection(db, 'jobs'), (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       setJobs(fetched);
+    }, (error) => {
+      console.warn("Public access to jobs limited:", error.message);
     });
 
-    // Fetch Unread Notifications count
-    const unsubNotifications = onSnapshot(collection(db, 'notifications'), (snapshot) => {
-      const unreadCount = snapshot.docs.filter(d => !d.data().read).length;
-      setUnreadNotifications(unreadCount);
-    });
+    let unsubEmployees: () => void = () => {};
+    let unsubNotifications: () => void = () => {};
+
+    // Restricted subscriptions (Only for authenticated users)
+    if (auth.currentUser) {
+      unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
+        const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Employee);
+        setEmployees(fetched);
+      }, (error) => {
+        console.warn("Employee access restricted:", error.message);
+      });
+
+      unsubNotifications = onSnapshot(collection(db, 'notifications'), (snapshot) => {
+        const unreadCount = snapshot.docs.filter(d => !d.data().read).length;
+        setUnreadNotifications(unreadCount);
+      }, (error) => {
+        console.warn("Notification access restricted:", error.message);
+      });
+    }
 
     return () => {
       unsubEmployees();
@@ -99,7 +111,7 @@ export default function App() {
       unsubJobs();
       unsubNotifications();
     };
-  }, []);
+  }, [isAuthReady]);
 
   useEffect(() => {
     if (employees.length > 0) {
@@ -383,21 +395,19 @@ export default function App() {
             </div>
             
             <div className="flex items-center gap-4 border-l border-slate-200 pl-6">
+              <button 
+                onClick={() => setIsFixLoginModalOpen(true)}
+                className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest px-2 py-1 hover:bg-blue-50 rounded-lg transition-all"
+              >
+                Fix Login Access
+              </button>
               {!isAuthReady ? (
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => setIsFixLoginModalOpen(true)}
-                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest px-2 py-1 hover:bg-blue-50 rounded-lg transition-all"
-                  >
-                    Fix Login Access
-                  </button>
-                  <button 
-                    onClick={handleLogin}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
-                  >
-                    Sign In
-                  </button>
-                </div>
+                <button 
+                  onClick={handleLogin}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
+                >
+                  Sign In
+                </button>
               ) : (
                 <button 
                   onClick={handleSignOut}

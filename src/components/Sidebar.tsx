@@ -56,27 +56,38 @@ export function Sidebar({ activeTab, setActiveTab, onAction, isAuthReady, onLogi
       </div>
 
       <nav className="flex-1 px-4 py-4 space-y-1">
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setActiveTab(item.id)}
-            className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
-              activeTab === item.id 
-                ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" 
-                : "text-slate-400 hover:bg-slate-800 hover:text-white"
-            )}
-          >
-            <item.icon className={cn(
-              "w-5 h-5 transition-colors",
-              activeTab === item.id ? "text-white" : "text-slate-500 group-hover:text-white"
-            )} />
-            <span className="font-medium">{item.label}</span>
-            {activeTab === item.id && (
-              <ChevronRight className="w-4 h-4 ml-auto opacity-50" />
-            )}
-          </button>
-        ))}
+        {navItems.map((item) => {
+          // Restricted tabs for public users
+          const isRestricted = !isAuthReady && !['dashboard', 'recruitment'].includes(item.id);
+          
+          return (
+            <button
+              key={item.id}
+              disabled={isRestricted}
+              onClick={() => setActiveTab(item.id)}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
+                activeTab === item.id 
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" 
+                  : isRestricted 
+                    ? "text-slate-600 cursor-not-allowed opacity-50" 
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+              )}
+            >
+              <item.icon className={cn(
+                "w-5 h-5 transition-colors",
+                activeTab === item.id ? "text-white" : isRestricted ? "text-slate-700" : "text-slate-500 group-hover:text-white"
+              )} />
+              <span className="font-medium">{item.label}</span>
+              {activeTab === item.id && (
+                <ChevronRight className="w-4 h-4 ml-auto opacity-50" />
+              )}
+              {isRestricted && (
+                <ShieldCheck className="w-3 h-3 ml-auto text-slate-600" />
+              )}
+            </button>
+          );
+        })}
       </nav>
 
       <div className="p-4 border-t border-slate-800 space-y-1">
