@@ -38,6 +38,10 @@ service cloud.firestore {
          (request.auth.token.email == "atabongdonald1@gmail.com" && request.auth.token.email_verified == true));
     }
 
+    function isTeamMember() {
+      return isAuthenticated();
+    }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
@@ -99,18 +103,20 @@ service cloud.firestore {
     }
 
     match /employees/{employeeId} {
-      allow read, write: if isAuthenticated() && isAdmin();
+      allow read: if isTeamMember();
+      allow write: if isAdmin();
     }
 
     match /jobs/{jobId} {
       allow read: if true;
-      allow create: if isValidJob(request.resource.data);
+      allow create: if isAuthenticated();
       allow update: if isAuthenticated() && isValidJob(request.resource.data);
-      allow delete: if isAuthenticated() && isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /notifications/{notificationId} {
-      allow read, write: if isAuthenticated() && isAdmin();
+      allow read: if isTeamMember();
+      allow write: if isAdmin();
     }
 
     match /test/connection {
@@ -122,7 +128,10 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && request.resource.data.role == 'user';
+      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin();
+      allow delete: if isAdmin();
     }
   }
 }

@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { db, auth } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import firebaseConfig from '../../firebase-applet-config.json';
 
 export function Settings({ isAuthReady }: { isAuthReady?: boolean }) {
   const [activeSection, setActiveSection] = useState('profile');
@@ -32,9 +33,9 @@ export function Settings({ isAuthReady }: { isAuthReady?: boolean }) {
 
   const [settings, setSettings] = useState({
     profile: {
-      name: 'Donald Atabong',
-      email: 'atabongdonald1@gmail.com',
-      role: 'System Administrator',
+      name: auth.currentUser?.displayName || 'User',
+      email: auth.currentUser?.email || '',
+      role: 'Staff Member',
       timezone: 'UTC+4 (Dubai)',
       language: 'English (US)'
     },
@@ -58,6 +59,16 @@ export function Settings({ isAuthReady }: { isAuthReady?: boolean }) {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           setSettings(prev => ({ ...prev, ...docSnap.data() }));
+        } else {
+          // Initialize with current user data
+          setSettings(prev => ({
+            ...prev,
+            profile: {
+              ...prev.profile,
+              name: auth.currentUser?.displayName || prev.profile.name,
+              email: auth.currentUser?.email || prev.profile.email,
+            }
+          }));
         }
       }
     };
@@ -320,12 +331,12 @@ export function Settings({ isAuthReady }: { isAuthReady?: boolean }) {
                           </button>
                         </div>
                       </div>
-                      <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-start gap-3">
-                        <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
+                        <Shield className="w-5 h-5 text-slate-400 mt-0.5" />
                         <div>
-                          <p className="text-sm font-bold text-blue-900">Two-Factor Authentication</p>
-                          <p className="text-xs text-blue-700 mt-1">Add an extra layer of security to your account by enabling 2FA.</p>
-                          <button className="mt-3 px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all">
+                          <p className="text-sm font-bold text-slate-900">Two-Factor Authentication</p>
+                          <p className="text-xs text-slate-500 mt-1">Add an extra layer of security to your account by enabling 2FA.</p>
+                          <button className="mt-3 px-4 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-300 transition-all">
                             Enable 2FA
                           </button>
                         </div>
@@ -346,6 +357,47 @@ export function Settings({ isAuthReady }: { isAuthReady?: boolean }) {
                   <div>
                     <h3 className="text-lg font-bold text-slate-900 mb-6">System Configuration</h3>
                     <div className="space-y-4">
+                      {/* Fix Login Access Section */}
+                      <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="p-2 bg-blue-600 rounded-lg">
+                            <Shield className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-blue-900">Fix Login Access</h4>
+                            <p className="text-xs text-blue-700">Authorize this domain in Firebase Console</p>
+                          </div>
+                        </div>
+                        
+                        <p className="text-sm text-blue-800 mb-4 leading-relaxed">
+                          If other users are unable to sign in, you must add this domain to your Firebase Authorized Domains list.
+                        </p>
+
+                        <div className="flex items-center gap-2 p-3 bg-white rounded-xl border border-blue-200 mb-4">
+                          <code className="text-xs font-mono text-blue-600 flex-1">{window.location.hostname}</code>
+                          <button 
+                            onClick={() => {
+                              navigator.clipboard.writeText(window.location.hostname);
+                              setToastMessage({ title: 'Copied', description: 'Domain copied to clipboard.' });
+                              setShowToast(true);
+                              setTimeout(() => setShowToast(false), 3000);
+                            }}
+                            className="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase"
+                          >
+                            Copy
+                          </button>
+                        </div>
+
+                        <a 
+                          href={`https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-all"
+                        >
+                          Open Firebase Console
+                        </a>
+                      </div>
+
                       <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm">
