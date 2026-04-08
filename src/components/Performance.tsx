@@ -186,7 +186,7 @@ export function Performance({ isAuthReady }: { isAuthReady?: boolean }) {
             </select>
           </div>
           <div className="h-80 w-full relative">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart data={employees.map(e => ({ name: e.name.split(' ')[0], score: e.performanceScore }))}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />

@@ -61,8 +61,46 @@ export default function App() {
   };
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const testConnection = async () => {
+      try {
+        const { doc, getDocFromServer } = await import('firebase/firestore');
+        await getDocFromServer(doc(db, 'test', 'connection'));
+        console.log("Firebase connection test successful.");
+      } catch (error: any) {
+        console.error("Firebase connection test failed:", error);
+        // If it's a 403 or 401, it might be an API key issue
+        if (error.code === 'permission-denied') {
+          console.warn("Firestore access denied. This is expected if rules are strict.");
+        } else if (error.message?.includes('API key not valid')) {
+          triggerGlobalToast("Firebase API key is invalid. Please check your configuration.");
+        }
+      }
+    };
+    testConnection();
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       setIsAuthReady(!!user);
+      
+      if (user) {
+        // Ensure user document exists in Firestore
+        const { doc, getDoc, setDoc } = await import('firebase/firestore');
+        const userRef = doc(db, 'users', user.uid);
+        try {
+          const userSnap = await getDoc(userRef);
+          if (!userSnap.exists()) {
+            await setDoc(userRef, {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName,
+              photoURL: user.photoURL,
+              role: 'user', // Default role for new users
+              createdAt: new Date().toISOString()
+            });
+          }
+        } catch (error) {
+          console.error("Error ensuring user document:", error);
+        }
+      }
     });
 
     return () => unsubscribeAuth();
@@ -222,17 +260,28 @@ export default function App() {
   const handleLogin = async () => {
     try {
       const provider = new GoogleAuthProvider();
+      // Set custom parameters if needed
+      provider.setCustomParameters({ prompt: 'select_account' });
+      
       await signInWithPopup(auth, provider);
+      triggerGlobalToast("Signed in successfully!");
     } catch (error: any) {
-      console.error("Login failed:", error);
+      console.error("Login failed detailed error:", error);
       const errorCode = error.code || "unknown";
+      const errorMessage = error.message || "An unexpected error occurred.";
       
       if (errorCode === 'auth/unauthorized-domain') {
         setIsFixLoginModalOpen(true);
       } else if (errorCode === 'auth/popup-blocked') {
-        triggerGlobalToast("Login popup was blocked. Please enable popups for this site.");
+        triggerGlobalToast("Login popup was blocked. Please enable popups for this site and click login again.");
+      } else if (errorCode === 'auth/operation-not-allowed') {
+        triggerGlobalToast("Google Login is not enabled in your Firebase Console. Please enable it in the Authentication > Sign-in method tab.");
+      } else if (errorCode === 'auth/popup-closed-by-user') {
+        triggerGlobalToast("Login window was closed before completion. Please try again.");
+      } else if (errorCode === 'auth/cancelled-popup-request') {
+        // Ignore this one as it usually means another popup was opened
       } else {
-        triggerGlobalToast(`Authentication failed (${errorCode}). Please check your Firebase configuration.`);
+        triggerGlobalToast(`Authentication failed: ${errorCode}. ${errorMessage}`);
       }
     }
   };

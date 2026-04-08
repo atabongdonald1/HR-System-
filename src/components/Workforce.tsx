@@ -39,6 +39,7 @@ export function Workforce({ isAuthReady }: { isAuthReady?: boolean }) {
   const [showToast, setShowToast] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState({ title: 'Workforce Intelligence', description: 'NEXA-HR is analyzing workforce data.' });
 
   // New Employee State
@@ -113,12 +114,12 @@ export function Workforce({ isAuthReady }: { isAuthReady?: boolean }) {
   };
 
   const handleDeleteEmployee = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this employee profile?')) return;
     try {
       await deleteDoc(doc(db, 'employees', id));
       setToastMessage({ title: 'Employee Deleted', description: 'The employee profile has been removed.' });
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3000);
+      setIsDeleteConfirmOpen(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `employees/${id}`);
     }
@@ -273,7 +274,7 @@ export function Workforce({ isAuthReady }: { isAuthReady?: boolean }) {
                           <FileText className="w-5 h-5" />
                         </button>
                         <button 
-                          onClick={() => handleDeleteEmployee(employee.id)}
+                          onClick={() => setIsDeleteConfirmOpen(employee.id)}
                           className="p-2 text-slate-400 hover:text-rose-600 rounded-lg transition-all"
                         >
                           <Trash2 className="w-5 h-5" />
@@ -453,6 +454,42 @@ export function Workforce({ isAuthReady }: { isAuthReady?: boolean }) {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {isDeleteConfirmOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl"
+            >
+              <div className="w-16 h-16 bg-rose-100 rounded-2xl flex items-center justify-center mb-6">
+                <AlertTriangle className="w-8 h-8 text-rose-600" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Delete Employee Profile?</h3>
+              <p className="text-slate-500 mb-8 leading-relaxed">
+                This action is irreversible. All performance data, payroll history, and compliance records for this employee will be permanently removed.
+              </p>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setIsDeleteConfirmOpen(null)}
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => handleDeleteEmployee(isDeleteConfirmOpen)}
+                  className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 transition-all shadow-xl shadow-rose-600/20"
+                >
+                  Delete Profile
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

@@ -47,7 +47,7 @@ service cloud.firestore {
     }
 
     function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+      return email is string && (email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") || email == "Not public");
     }
 
     function hasRequiredFields(fields) {
@@ -61,10 +61,11 @@ service cloud.firestore {
     function isValidCandidate(data) {
       return hasRequiredFields(['id', 'name', 'email', 'role', 'status']) &&
              data.id is string && data.id.size() > 0 && data.id.size() <= 50 &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
              isValidEmail(data.email) &&
-             data.role is string && data.role.size() > 0 && data.role.size() <= 100 &&
-             data.status in ['New', 'Screening', 'Interviewing', 'Offered', 'Hired', 'Rejected'];
+             data.role is string && data.role.size() > 0 && data.role.size() <= 200 &&
+             data.status in ['New', 'Screening', 'Interviewing', 'Offered', 'Hired', 'Rejected'] &&
+             (!('profilePictureUrl' in data) || (data.profilePictureUrl is string && data.profilePictureUrl.size() <= 1000));
     }
 
     function isValidEmployee(data) {
@@ -97,7 +98,7 @@ service cloud.firestore {
 
     match /candidates/{candidateId} {
       allow read: if true;
-      allow create: if isValidCandidate(request.resource.data);
+      allow create: if isAuthenticated() && isValidCandidate(request.resource.data);
       allow update: if isAuthenticated() && isValidCandidate(request.resource.data);
       allow delete: if isAuthenticated() && isAdmin();
     }

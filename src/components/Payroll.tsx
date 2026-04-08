@@ -29,8 +29,6 @@ import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { Employee } from '../types';
 
-const PAYROLL_STATS: any[] = [];
-
 export function Payroll({ isAuthReady }: { isAuthReady?: boolean }) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [showToast, setShowToast] = useState(false);
@@ -53,6 +51,18 @@ export function Payroll({ isAuthReady }: { isAuthReady?: boolean }) {
   };
 
   const totalPayroll = employees.reduce((acc, emp) => acc + emp.salary, 0);
+
+  const payrollSummary = employees.reduce((acc, emp) => {
+    const type = emp.department || 'Operations';
+    acc[type] = (acc[type] || 0) + emp.salary;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const chartData = Object.entries(payrollSummary).map(([name, value], index) => ({
+    name,
+    value,
+    color: ['#2563eb', '#6366f1', '#10b981', '#f59e0b', '#64748b'][index % 5]
+  }));
 
   return (
     <div id="payroll-view" className="space-y-8">
@@ -98,16 +108,16 @@ export function Payroll({ isAuthReady }: { isAuthReady?: boolean }) {
           </div>
 
           <div className="mt-8 h-[200px] w-full relative">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie
-                  data={PAYROLL_STATS}
+                  data={chartData}
                   innerRadius={60}
                   outerRadius={80}
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {PAYROLL_STATS.map((entry, index) => (
+                  {chartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -119,7 +129,7 @@ export function Payroll({ isAuthReady }: { isAuthReady?: boolean }) {
           </div>
 
           <div className="mt-6 space-y-3">
-            {PAYROLL_STATS.map((stat) => (
+            {chartData.map((stat) => (
               <div key={stat.name} className="flex justify-between items-center text-sm">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stat.color }} />

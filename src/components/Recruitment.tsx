@@ -339,6 +339,7 @@ export function Recruitment({ isAuthReady }: { isAuthReady?: boolean }) {
         experience: c.experience,
         skills: c.skills,
         education: c.education || 'Verified by NEXA-SOURCE',
+        ...(c.profilePictureUrl ? { profilePictureUrl: c.profilePictureUrl } : {}),
         hireScore: c.hireScore,
         status: 'New',
         source: c.source || 'NEXA-SOURCE',
@@ -389,7 +390,7 @@ export function Recruitment({ isAuthReady }: { isAuthReady?: boolean }) {
     try {
       const collectedCandidates = await geminiService.collectCVs(jobs);
       
-      if (collectedCandidates.length === 0) {
+      if (!Array.isArray(collectedCandidates) || collectedCandidates.length === 0) {
         setToastMessage({
           title: 'No CVs Found',
           description: 'NEXA-COLLECT could not find matching profiles on the web. Try adding more details to your job posts.'
@@ -399,26 +400,39 @@ export function Recruitment({ isAuthReady }: { isAuthReady?: boolean }) {
         return;
       }
 
-      const newCandidates: Candidate[] = collectedCandidates.map((c: any) => ({
-        id: Math.random().toString(36).substr(2, 9),
-        name: c.name,
-        email: c.email || 'Not public',
-        phone: c.phone || 'Not public',
-        role: c.role,
-        experience: c.experience,
-        skills: c.skills,
-        education: c.education || 'Normalized by NEXA-COLLECT',
-        hireScore: c.hireScore,
-        status: 'New',
-        source: c.source || 'NEXA-COLLECT',
-        analysis: {
-          skillsMatch: c.hireScore,
-          experienceRelevance: Math.min(100, c.hireScore + 5),
-          behavioralIndicators: c.behavioralIndicators || ['Structured', 'Efficient'],
-          culturalFit: 80,
-          summary: c.summary || `Aggregated and normalized by NEXA-COLLECT from ${c.source}.`
-        }
-      }));
+      const newCandidates: Candidate[] = collectedCandidates
+        .filter((c: any) => c.email || c.phone)
+        .map((c: any) => ({
+          id: Math.random().toString(36).substr(2, 9),
+          name: c.name,
+          email: c.email || 'Not public',
+          phone: c.phone || 'Not public',
+          role: c.role,
+          experience: c.experience,
+          skills: c.skills,
+          education: c.education || 'Normalized by NEXA-COLLECT',
+          ...(c.profilePictureUrl ? { profilePictureUrl: c.profilePictureUrl } : {}),
+          hireScore: c.hireScore,
+          status: 'New',
+          source: c.source || 'NEXA-COLLECT',
+          analysis: {
+            skillsMatch: c.hireScore,
+            experienceRelevance: Math.min(100, c.hireScore + 5),
+            behavioralIndicators: c.behavioralIndicators || ['Structured', 'Efficient'],
+            culturalFit: 80,
+            summary: c.summary || `Aggregated and normalized by NEXA-COLLECT from ${c.source}.`
+          }
+        }));
+
+      if (newCandidates.length === 0) {
+        setToastMessage({
+          title: 'No Contact Info Found',
+          description: 'NEXA-COLLECT found profiles, but none had accessible contact information. Try adjusting your search criteria.'
+        });
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 4000);
+        return;
+      }
 
       for (const candidate of newCandidates) {
         await saveCandidate(candidate);
@@ -430,14 +444,15 @@ export function Recruitment({ isAuthReady }: { isAuthReady?: boolean }) {
       });
       setShowToast(true);
       setTimeout(() => setShowToast(false), 5000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Collection error:', error);
+      const errorMessage = error.message || 'NEXA-COLLECT encountered a database or AI error. Please retry.';
       setToastMessage({
         title: 'Ingestion Failed',
-        description: 'NEXA-COLLECT encountered a database error. Please retry.'
+        description: errorMessage.length > 100 ? errorMessage.substring(0, 100) + '...' : errorMessage
       });
       setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      setTimeout(() => setShowToast(false), 5000);
     } finally {
       setIsCollecting(false);
     }
@@ -578,7 +593,7 @@ export function Recruitment({ isAuthReady }: { isAuthReady?: boolean }) {
             <button 
               id="btn-auto-collect"
               onClick={handleAutoCollect}
-              disabled={isCollecting || isUploading || isSourcing}
+              disabled={isCollecting || isUploading || isSourcing || !isAuthReady}
               className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/20"
             >
               {isCollecting ? (
@@ -768,8 +783,17 @@ export function Recruitment({ isAuthReady }: { isAuthReady?: boolean }) {
                     )}
                     <div className="flex items-start justify-between">
                   <div className="flex gap-4">
-                    <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-2xl font-bold text-slate-400">
-                      {candidate.name.charAt(0)}
+                    <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-2xl font-bold text-slate-400 overflow-hidden">
+                      {candidate.profilePictureUrl ? (
+                        <img 
+                          src={candidate.profilePictureUrl} 
+                          alt={candidate.name} 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        candidate.name.charAt(0)
+                      )}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
@@ -1094,8 +1118,17 @@ export function Recruitment({ isAuthReady }: { isAuthReady?: boolean }) {
                 {/* Left Column: Basic Info & Contact */}
                 <div className="lg:col-span-1 space-y-8">
                   <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm text-center">
-                    <div className="w-32 h-32 bg-slate-100 rounded-3xl mx-auto mb-6 flex items-center justify-center text-4xl font-bold text-slate-400 shadow-inner">
-                      {selectedCandidate.name.charAt(0)}
+                    <div className="w-32 h-32 bg-slate-100 rounded-3xl mx-auto mb-6 flex items-center justify-center text-4xl font-bold text-slate-400 shadow-inner overflow-hidden">
+                      {selectedCandidate.profilePictureUrl ? (
+                        <img 
+                          src={selectedCandidate.profilePictureUrl} 
+                          alt={selectedCandidate.name} 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        selectedCandidate.name.charAt(0)
+                      )}
                     </div>
                     <h3 className="text-2xl font-bold text-slate-900 mb-1">{selectedCandidate.name}</h3>
                     <p className="text-blue-600 font-bold mb-6">{selectedCandidate.role}</p>

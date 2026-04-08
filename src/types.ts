@@ -10,6 +10,7 @@ export interface Candidate {
   skills: string[];
   education: string;
   cvUrl?: string;
+  profilePictureUrl?: string;
   hireScore: number; // 0-100
   status: 'New' | 'Screening' | 'Interviewing' | 'Offered' | 'Hired' | 'Rejected';
   source?: string;

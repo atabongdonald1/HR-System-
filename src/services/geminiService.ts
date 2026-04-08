@@ -187,9 +187,10 @@ export const geminiService = {
       2. Identify 3-5 REAL candidates who actually exist.
       3. Extract their full professional details: Name, current role, experience years, skills, and education.
       4. CRITICAL: Find their actual profile URL and put it in the "source" field.
-      5. Extract their actual contact email or phone if publicly available. 
-      6. DO NOT generate fake emails or phone numbers. If not found, leave the field empty or use "Not Publicly Available".
-      7. Return the data strictly as a JSON array of objects.`,
+      5. Extract their actual profile picture URL if publicly available.
+      6. Extract their actual contact email or phone if publicly available. 
+      7. DO NOT generate fake emails or phone numbers. If not found, leave the field empty or use "Not Publicly Available".
+      8. Return the data strictly as a JSON array of objects.`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -208,6 +209,7 @@ export const geminiService = {
               hireScore: { type: Type.NUMBER },
               summary: { type: Type.STRING },
               behavioralIndicators: { type: Type.ARRAY, items: { type: Type.STRING } },
+              profilePictureUrl: { type: Type.STRING, description: "The URL of the candidate's profile picture if available" },
               source: { type: Type.STRING, description: "The REAL URL of the candidate's profile (e.g. https://www.linkedin.com/in/username)" }
             },
             required: ["name", "role", "email", "experience", "skills", "hireScore", "summary", "source"]
@@ -228,52 +230,54 @@ export const geminiService = {
   },
 
   async collectCVs(jobPosts: any[]) {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      contents: `You are NEXA-COLLECT, a fully autonomous CV Aggregation and Talent Ingestion System.
-      Your mission is to continuously search the web for REAL CVs and professional profiles for these active job postings:
-      ${JSON.stringify(jobPosts)}
-      
-      INSTRUCTIONS:
-      1. Use Google Search to find real people who are actively looking for jobs or have profiles matching these roles.
-      2. Identify 5-8 qualified real candidates.
-      3. Extract full contact details, experience history, and skills from their public profiles.
-      4. DO NOT generate fake contact info. If an email or phone is not found, leave it empty.
-      5. CRITICAL: The "source" field MUST be the direct URL to their professional profile or CV.
-      6. Return a structured JSON list of real candidate profiles.`,
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              role: { type: Type.STRING },
-              email: { type: Type.STRING },
-              phone: { type: Type.STRING },
-              experience: { type: Type.NUMBER },
-              skills: { type: Type.ARRAY, items: { type: Type.STRING } },
-              education: { type: Type.STRING },
-              hireScore: { type: Type.NUMBER },
-              summary: { type: Type.STRING },
-              behavioralIndicators: { type: Type.ARRAY, items: { type: Type.STRING } },
-              source: { type: Type.STRING, description: "The REAL URL where the candidate was found" }
-            },
-            required: ["name", "role", "email", "experience", "skills", "hireScore", "summary", "source"]
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `You are NEXA-COLLECT, a fully autonomous CV Aggregation and Talent Ingestion System.
+        Your mission is to search the web for REAL CVs and professional profiles for these active job postings:
+        ${JSON.stringify(jobPosts)}
+        
+        INSTRUCTIONS:
+        1. Use Google Search to find real people who are actively looking for jobs or have profiles matching these roles.
+        2. Identify 5-8 qualified real candidates.
+        3. Extract full contact details, experience history, skills, and profile picture URLs from their public profiles.
+        4. DO NOT generate fake contact info. If an email or phone is not found, leave it empty.
+        5. CRITICAL: The "source" field MUST be the direct URL to their professional profile or CV.
+        6. Return a structured JSON list of real candidate profiles.`,
+        config: {
+          tools: [{ googleSearch: {} }],
+          toolConfig: { includeServerSideToolInvocations: true },
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                name: { type: Type.STRING },
+                role: { type: Type.STRING },
+                email: { type: Type.STRING },
+                phone: { type: Type.STRING },
+                experience: { type: Type.NUMBER },
+                skills: { type: Type.ARRAY, items: { type: Type.STRING } },
+                education: { type: Type.STRING },
+                hireScore: { type: Type.NUMBER },
+                summary: { type: Type.STRING },
+                behavioralIndicators: { type: Type.ARRAY, items: { type: Type.STRING } },
+                profilePictureUrl: { type: Type.STRING, description: "The URL of the candidate's profile picture if available" },
+                source: { type: Type.STRING, description: "The REAL URL where the candidate was found" }
+              },
+              required: ["name", "role", "email", "experience", "skills", "hireScore", "summary", "source"]
+            }
           }
         }
-      }
-    });
-    
-    try {
+      });
+      
       const text = response.text || "[]";
       const jsonStr = text.replace(/```json\n?|\n?```/g, '').trim();
       return JSON.parse(jsonStr);
     } catch (e) {
       console.error("Failed to parse collection response:", e);
-      return [];
+      throw e; // Throw so the component can handle it
     }
   }
 };
